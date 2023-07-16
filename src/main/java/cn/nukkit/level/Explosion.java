@@ -347,6 +347,8 @@ public class Explosion {
             send.add(new Vector3(block.x - source.x, block.y - source.y, block.z - source.z));
         }
 
+        if (fireIgnitions == null) fireIgnitions = new HashSet<>();
+
         for (Vector3 remainingPos : fireIgnitions) {
             Block toIgnite = level.getBlock(remainingPos);
             if (toIgnite.getId() == BlockID.AIR && toIgnite.down().isSolid(BlockFace.UP)) {

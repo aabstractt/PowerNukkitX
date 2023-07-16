@@ -271,13 +271,8 @@ public class EntityFishingHook extends SlenderProjectile {
                     player.getLevel().dropExpOrb(player, event.getExperience());
                 }
             }
-        } else if (this.shootingEntity != null) {
-            var eid = this.getDataPropertyLong(DATA_TARGET_EID);
-            var targetEntity = this.getLevel().getEntity(eid);
-            if (targetEntity != null && targetEntity.isAlive()) { // 钓鱼竿收杆应该牵引被钓生物
-                targetEntity.setMotion(this.shootingEntity.subtract(targetEntity).divide(8).add(0, 0.3, 0));
-            }
         }
+
         this.close();
     }
 

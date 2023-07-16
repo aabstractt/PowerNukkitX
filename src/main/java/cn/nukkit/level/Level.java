@@ -3153,6 +3153,8 @@ public class Level implements ChunkManager, Metadatable {
                         e instanceof EntityPainting || e == player || (e instanceof Player p && p.isSpectator())) {
                     continue;
                 }
+                if (!e.canCollideWithEntities) continue;
+
                 ++realCount;
             }
             if (player != null) {

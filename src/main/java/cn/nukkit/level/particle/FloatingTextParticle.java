@@ -10,6 +10,7 @@ import cn.nukkit.math.Vector3;
 import cn.nukkit.network.protocol.*;
 import cn.nukkit.utils.SerializedImage;
 import com.google.common.base.Strings;
+import lombok.Getter;
 
 import java.util.ArrayList;
 import java.util.UUID;
@@ -32,7 +33,7 @@ public class FloatingTextParticle extends Particle {
     protected UUID uuid = UUID.randomUUID();
     protected long entityId = -1;
     protected boolean invisible = false;
-    protected EntityMetadata metadata = new EntityMetadata();
+    @Getter protected EntityMetadata metadata = new EntityMetadata();
 
     public FloatingTextParticle(Location location, String title) {
         this(location, title, null);
@@ -93,6 +94,7 @@ public class FloatingTextParticle extends Particle {
             SetEntityDataPacket packet = new SetEntityDataPacket();
             packet.eid = entityId;
             packet.metadata = metadata;
+
             level.addChunkPacket(getChunkX(), getChunkZ(), packet);
         }
     }

@@ -2220,7 +2220,7 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
 
     @Override
     public boolean canCollide() {
-        return gamemode != SPECTATOR;
+        return this.canCollideWithEntities && gamemode != SPECTATOR;
     }
 
     @Override
@@ -3256,15 +3256,19 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                         boolean ignore = blockId == Block.LADDER || blockId == Block.VINE || blockId == Block.COBWEB
                                 || blockId == Block.SCAFFOLDING;// || (blockId == Block.SWEET_BERRY_BUSH && block.getDamage() > 0);
 
-                        if (!this.hasEffect(Effect.JUMP_BOOST) && diff > 0.6 && expectedVelocity < this.speed.y && !ignore) {
+                        /*if (!this.hasEffect(Effect.JUMP_BOOST) && diff > 0.6 && expectedVelocity < this.speed.y && !ignore && this.attackTime == 0) {
                             if (this.inAirTicks < 150) {
                                 this.setMotion(new Vector3(0, expectedVelocity, 0));
+
+                                System.out.println("Setting motion due to expected velocity... expected: " + expectedVelocity + ", diff " + diff);
                             } else if (this.kick(PlayerKickEvent.Reason.FLYING_DISABLED, "Flying is not enabled on this server")) {
                                 return false;
                             }
-                        }
+                        }*/
                         if (ignore) {
                             this.resetFallDistance();
+
+                            System.out.println("resetfall distance changed!");
                         }
                     }
 
@@ -5758,7 +5762,7 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                 .putList(new ListTag<FloatTag>("Rotation")
                         .add(new FloatTag("", (float) yaw))
                         .add(new FloatTag("", (float) pitch)));
-        double f = 1.1;
+        double f = 1.75;
         EntityFishingHook fishingHook = new EntityFishingHook(chunk, nbt, this);
         fishingHook.setMotion(new Vector3(-Math.sin(Math.toRadians(yaw)) * Math.cos(Math.toRadians(pitch)) * f * f, -Math.sin(Math.toRadians(pitch)) * f * f,
                 Math.cos(Math.toRadians(yaw)) * Math.cos(Math.toRadians(pitch)) * f * f));

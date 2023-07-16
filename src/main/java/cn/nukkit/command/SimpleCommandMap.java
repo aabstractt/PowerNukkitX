@@ -63,7 +63,7 @@ public class SimpleCommandMap implements CommandMap {
         this.register("nukkit", new DayLockCommand("daylock"));
         this.register("nukkit", new ClearCommand("clear"));
         this.register("nukkit", new CloneCommand("clone"));
-        this.register("nukkit", new VersionCommand("version"));
+        //this.register("nukkit", new VersionCommand("version"));
         this.register("nukkit", new PluginsCommand("plugins"));
         this.register("nukkit", new SeedCommand("seed"));
         this.register("nukkit", new HelpCommand("help"));

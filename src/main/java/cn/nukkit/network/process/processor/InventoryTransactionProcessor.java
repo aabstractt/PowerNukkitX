@@ -399,9 +399,9 @@ public class InventoryTransactionProcessor extends DataPacketProcessor<Inventory
             return;
         }
         int type = useItemOnEntityData.actionType;
-        if (!useItemOnEntityData.itemInHand.equalsExact(player.getInventory().getItemInHand())) {
+        /*if (!useItemOnEntityData.itemInHand.equalsExact(player.getInventory().getItemInHand())) {
             player.getInventory().sendHeldItem(player);
-        }
+        }*/
         Item item = player.getInventory().getItemInHand();
         switch (type) {
             case InventoryTransactionPacket.USE_ITEM_ON_ENTITY_ACTION_INTERACT -> {
@@ -553,7 +553,7 @@ public class InventoryTransactionProcessor extends DataPacketProcessor<Inventory
                         }
                     }
                 }
-                player.getInventory().sendHeldItem(player);
+                //player.getInventory().sendHeldItem(player);
                 if (blockVector.distanceSquared(player) > 10000) {
                     return;
                 }
@@ -603,6 +603,7 @@ public class InventoryTransactionProcessor extends DataPacketProcessor<Inventory
                     item = player.getInventory().getItemInHand();
                 } else if (!player.getInventory().getItemInHand().equals(useItemData.itemInHand)) {
                     player.getInventory().sendHeldItem(player);
+                    System.out.println("Sending due to update");
                     return;
                 } else {
                     item = player.getInventory().getItemInHand();

@@ -582,6 +582,8 @@ public abstract class Entity extends Location implements Metadatable {
     @Since("1.20.10-r1")
     protected volatile boolean saveWithChunk = true;
 
+    public boolean canCollideWithEntities = true;
+
     public Entity(FullChunk chunk, CompoundTag nbt) {
         if (this instanceof Player) {
             return;
@@ -1977,7 +1979,7 @@ public abstract class Entity extends Location implements Metadatable {
     }
 
     public boolean canCollideWith(Entity entity) {
-        return !this.justCreated && this != entity && !this.noClip;
+        return !this.justCreated && this != entity && !this.noClip && this.canCollideWithEntities;
     }
 
     @PowerNukkitXOnly
