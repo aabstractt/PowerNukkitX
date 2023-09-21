@@ -88,6 +88,8 @@ public class StartGamePacket extends DataPacket {
     //HACK: For now we can specify this version, since the new chunk changes are not relevant for our Anvil format.
     //However, it could be that Microsoft will prevent this in a new update.
 
+    public CompoundTag playerPropertyData = new CompoundTag("");
+
     public String levelId = ""; //base64 string, usually the same as world folder name in vanilla
     public String worldName;
     public String premiumWorldTemplateId = "";
@@ -181,7 +183,7 @@ public class StartGamePacket extends DataPacket {
         this.putBoolean(this.commandsEnabled);
         this.putBoolean(this.isTexturePacksRequired);
         this.putGameRules(this.gameRules);
-        if (Server.getInstance().isEnableExperimentMode() && !Server.getInstance().getConfig("settings.waterdogpe", false)) {
+        if (Server.getInstance().isEnableExperimentMode() && !Server.getInstance().isWaterdogCapable()) {
             this.putLInt(4); // Experiment count
             {
                 this.putString("data_driven_items");
@@ -223,6 +225,7 @@ public class StartGamePacket extends DataPacket {
         this.putString(""); // EduSharedUriResource buttonName
         this.putString(""); // EduSharedUriResource linkUri
         if (Server.getInstance().isEnableExperimentMode()) { // force Experimental Gameplay
+            this.putBoolean(Server.getInstance().isEnableExperimentMode()); // force Experimental Gameplay
             this.putBoolean(!Server.getInstance().getConfig("settings.waterdogpe", false)); // Why WaterDogPE require an extra optional boolean if this is set to true? I don't know.
         } else {
             this.putBoolean(false);
@@ -260,7 +263,7 @@ public class StartGamePacket extends DataPacket {
         this.putBoolean(this.isInventoryServerAuthoritative);
         this.putString(vanillaVersion); // Server Engine
         try {
-            this.put(NBTIO.writeNetwork(new CompoundTag(""))); // playerPropertyData
+            this.put(NBTIO.writeNetwork(playerPropertyData)); // playerPropertyData
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

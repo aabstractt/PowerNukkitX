@@ -10,6 +10,7 @@ import cn.nukkit.blockstate.BlockState;
 import cn.nukkit.entity.custom.CustomEntity;
 import cn.nukkit.entity.custom.CustomEntityDefinition;
 import cn.nukkit.entity.data.*;
+import cn.nukkit.entity.data.property.*;
 import cn.nukkit.entity.item.*;
 import cn.nukkit.entity.mob.*;
 import cn.nukkit.entity.passive.*;
@@ -41,6 +42,7 @@ import cn.nukkit.metadata.Metadatable;
 import cn.nukkit.nbt.tag.*;
 import cn.nukkit.network.protocol.*;
 import cn.nukkit.network.protocol.types.EntityLink;
+import cn.nukkit.network.protocol.types.PropertySyncData;
 import cn.nukkit.plugin.Plugin;
 import cn.nukkit.potion.Effect;
 import cn.nukkit.scheduler.Task;
@@ -581,13 +583,23 @@ public abstract class Entity extends Location implements Metadatable {
     @PowerNukkitXOnly
     @Since("1.20.10-r1")
     protected volatile boolean saveWithChunk = true;
-
     public boolean canCollideWithEntities = true;
+
+    @PowerNukkitXOnly
+    @Since("1.20.10-r2")
+    private Map<String, Integer> intProperties = new LinkedHashMap<>();
+
+    @PowerNukkitXOnly
+    @Since("1.20.10-r2")
+    private Map<String, Float> floatProperties = new LinkedHashMap<>();
 
     public Entity(FullChunk chunk, CompoundTag nbt) {
         if (this instanceof Player) {
+            initEntityProperties("minecraft:player");
             return;
         }
+
+        initEntityProperties();
 
         this.init(chunk, nbt);
     }
@@ -774,7 +786,7 @@ public abstract class Entity extends Location implements Metadatable {
     @PowerNukkitXOnly
     @Since("1.19.21-r2")
     public static OK<?> registerCustomEntity(CustomEntityProvider customEntityProvider) {
-        if (!Server.getInstance().isEnableExperimentMode() || Server.getInstance().getConfig("settings.waterdogpe", false)) {
+        if (!Server.getInstance().isEnableExperimentMode()) {
             return new OK<>(false, "The server does not have the experiment mode feature enabled.Unable to register custom entity!");
         }
         entityDefinitions.add(customEntityProvider.getCustomEntityDefinition());
@@ -1779,6 +1791,7 @@ public abstract class Entity extends Location implements Metadatable {
         SetEntityDataPacket pk = new SetEntityDataPacket();
         pk.eid = this.getId();
         pk.metadata = data == null ? this.dataProperties : data;
+        pk.syncedProperties = this.propertySyncData();
 
         player.dataPacket(pk);
     }
@@ -1791,6 +1804,7 @@ public abstract class Entity extends Location implements Metadatable {
         SetEntityDataPacket pk = new SetEntityDataPacket();
         pk.eid = this.getId();
         pk.metadata = data == null ? this.dataProperties : data;
+        pk.syncedProperties = this.propertySyncData();
 
         for (Player player : players) {
             if (player == this) {
@@ -1868,11 +1882,11 @@ public abstract class Entity extends Location implements Metadatable {
         if (newHealth < 1 && this instanceof Player player) {
             if (source.getCause() != DamageCause.VOID && source.getCause() != DamageCause.SUICIDE) {
                 boolean totem = false;
+                boolean isOffhand = false;
                 if (player.getOffhandInventory().getItem(0) instanceof ItemTotem) {
-                    player.getOffhandInventory().clear(0, true);
                     totem = true;
+                    isOffhand = true;
                 } else if (player.getInventory().getItemInHand() instanceof ItemTotem) {
-                    player.getInventory().clear(player.getInventory().getHeldItemIndex(), true);
                     totem = true;
                 }
                 //复活图腾实现
@@ -1892,6 +1906,12 @@ public abstract class Entity extends Location implements Metadatable {
                     pk.eid = this.getId();
                     pk.event = EntityEventPacket.CONSUME_TOTEM;
                     player.dataPacket(pk);
+
+                    if (isOffhand) {
+                        player.getOffhandInventory().clear(0, true);
+                    } else {
+                        player.getInventory().clear(player.getInventory().getHeldItemIndex(), true);
+                    }
 
                     source.setCancelled(true);
                     return false;
@@ -3170,7 +3190,8 @@ public abstract class Entity extends Location implements Metadatable {
             outerScaffolding:
             for (int i = minX; i <= maxX; i++) {
                 for (int j = minZ; j <= maxZ; j++) {
-                    if (level.getBlockIdAt(i, Y, j) == BlockID.SCAFFOLDING) {
+                    Location location = new Location(i, Y, j,level);
+                    if (location.getLevelBlock(false).getId() == BlockID.SCAFFOLDING) {
                         setDataFlag(DATA_FLAGS_EXTENDED, DATA_FLAG_OVER_SCAFFOLDING, true);
                         break outerScaffolding;
                     }
@@ -3865,5 +3886,106 @@ public abstract class Entity extends Location implements Metadatable {
     }
 
     private record OldStringClass(String key, Class<? extends Entity> value) {
+    }
+
+    @PowerNukkitXOnly
+    @Since("1.20.10-r2")
+    private boolean validateAndSetIntProperty(String identifier, int value) {
+        if(!intProperties.containsKey(identifier)) return false;
+        intProperties.put(identifier, value);
+        return true;
+    }
+
+    @PowerNukkitXOnly
+    @Since("1.20.10-r2")
+    public final boolean setIntEntityProperty(String identifier, int value) {
+        return validateAndSetIntProperty(identifier, value);
+    }
+
+    @PowerNukkitXOnly
+    @Since("1.20.10-r2")
+    public final boolean setBooleanEntityProperty(String identifier, boolean value) {
+        return validateAndSetIntProperty(identifier, value ? 1 : 0);
+    }
+
+    @PowerNukkitXOnly
+    @Since("1.20.10-r2")
+    public final boolean setFloatEntityProperty(String identifier, float value) {
+        if(!floatProperties.containsKey(identifier)) return false;
+        floatProperties.put(identifier, value);
+        return true;
+    }
+
+    @PowerNukkitXOnly
+    @Since("1.20.10-r2")
+    public final boolean setEnumEntityProperty(String identifier, String value) {
+        if(!intProperties.containsKey(identifier)) return false;
+        List<EntityProperty> entityPropertyList = EntityProperty.getEntityProperty(this.getIdentifier().toString());
+
+        for (EntityProperty property : entityPropertyList) {
+            if(property.getIdentifier() == identifier && property instanceof EnumEntityProperty) {
+                int index = ((EnumEntityProperty) property).findIndex(value);
+
+                if(index >= 0) {
+                    intProperties.put(identifier, index);
+                    return true;
+                }
+                return false;
+            }
+        }
+        return false;
+    }
+
+    @PowerNukkitXOnly
+    @Since("1.20.10-r2")
+    private void initEntityProperties() {
+        if(this.getIdentifier() != null) {
+            initEntityProperties(this.getIdentifier().toString());
+        }
+    }
+
+    @PowerNukkitXOnly
+    @Since("1.20.10-r2")
+    private void initEntityProperties(String entityIdentifier) {
+        List<EntityProperty> entityPropertyList = EntityProperty.getEntityProperty(entityIdentifier);
+        if (entityPropertyList.isEmpty()) return;
+
+        for (EntityProperty property : entityPropertyList) {
+            final String identifier = property.getIdentifier();
+
+            if (property instanceof FloatEntityProperty) {
+                FloatEntityProperty floatProperty = (FloatEntityProperty) property;
+                floatProperties.put(identifier, floatProperty.getDefaultValue());
+            } else if (property instanceof IntEntityProperty) {
+                IntEntityProperty intProperty = (IntEntityProperty) property;
+                intProperties.put(identifier, intProperty.getDefaultValue());
+            } else if (property instanceof BooleanEntityProperty) {
+                BooleanEntityProperty booleanProperty = (BooleanEntityProperty) property;
+                intProperties.put(identifier, booleanProperty.getDefaultValue() ? 1 : 0);
+            } else if (property instanceof EnumEntityProperty) {
+                EnumEntityProperty enumProperty = (EnumEntityProperty) property;
+                intProperties.put(identifier, enumProperty.findIndex(enumProperty.getDefaultValue()));
+            }
+        }
+    }
+
+    @PowerNukkitXOnly
+    @Since("1.20.10-r2")
+    private PropertySyncData propertySyncData() {
+        Collection<Integer> intValues = intProperties.values();
+        int[] intArray = new int[intValues.size()];
+        int i = 0;
+        for (Integer value : intValues) {
+            intArray[i++] = value;
+        }
+
+        Collection<Float> floatValues = floatProperties.values();
+        float[] floatArray = new float[floatValues.size()];
+        i = 0;
+        for (Float value : floatValues) {
+            floatArray[i++] = value;
+        }
+
+        return new PropertySyncData(intArray, floatArray);
     }
 }

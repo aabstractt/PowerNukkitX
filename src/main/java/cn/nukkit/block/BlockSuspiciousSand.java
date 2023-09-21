@@ -19,6 +19,10 @@ public class BlockSuspiciousSand extends BlockFallableMeta {
     public BlockSuspiciousSand() {
     }
 
+    public BlockSuspiciousSand(int meta) {
+        super(meta);
+    }
+
     @Override
     public BlockProperties getProperties() {
         return PROPERTIES;

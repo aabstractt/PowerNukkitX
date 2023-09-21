@@ -12,6 +12,7 @@ import cn.nukkit.blockstate.BlockStateRegistry;
 import cn.nukkit.blockstate.exception.InvalidBlockStateException;
 import cn.nukkit.entity.Entity;
 import cn.nukkit.entity.EntityAsyncPrepare;
+import cn.nukkit.entity.EntityIntelligent;
 import cn.nukkit.entity.item.EntityFirework;
 import cn.nukkit.entity.item.EntityItem;
 import cn.nukkit.entity.item.EntityPainting;
@@ -129,6 +130,8 @@ public class Level implements ChunkManager, Metadatable {
     public static int COMPRESSION_LEVEL = 8;
     private static int levelIdCounter = 1;
     private static int chunkLoaderCounter = 1;
+
+    private int serverLoadLevelTick = 0;
 
     static {
         randomTickBlocks.add(BlockID.GRASS);
@@ -341,6 +344,7 @@ public class Level implements ChunkManager, Metadatable {
         this.levelId = levelIdCounter++;
         this.blockMetadata = new BlockMetadataStore(this);
         this.server = server;
+        serverLoadLevelTick = server.getTick();
         this.autoSave = server.getAutoSave();
         this.provider = provider.apply(this, path);
         LevelProvider levelProvider = requireProvider();
@@ -1247,6 +1251,12 @@ public class Level implements ChunkManager, Metadatable {
                         }), Server.getInstance().computeThreadPool).join();
                 for (long id : this.updateEntities.keySetLong()) {
                     Entity entity = this.updateEntities.get(id);
+                    if(entity instanceof EntityIntelligent intelligent) {
+                        if(intelligent.getBehaviorGroup() == null) {
+                            this.updateEntities.remove(id);
+                            continue;
+                        }
+                    }
                     if (entity == null) {
                         this.updateEntities.remove(id);
                         continue;
@@ -1256,6 +1266,7 @@ public class Level implements ChunkManager, Metadatable {
                     }
                 }
             }
+
             this.updateBlockEntities.removeIf(blockEntity -> !blockEntity.isValid() || !blockEntity.onUpdate());
 
             this.tickChunks();
@@ -3089,7 +3100,7 @@ public class Level implements ChunkManager, Metadatable {
                 if (ev.getAction() == Action.RIGHT_CLICK_BLOCK) {
                     target.onPlayerRightClick(player, item, face, new Vector3(fx, fy, fz));
                 }
-                if ((!player.isSneaking() || player.getInventory().getItemInHand().isNull()) && target.canBeActivated() && target.onActivate(item, player)) {
+                if (((!player.isSneaking() && !player.isFlySneaking()) || player.getInventory().getItemInHand().isNull()) && target.canBeActivated() && target.onActivate(item, player)) {
                     if (item.isTool() && item.getDamage() >= item.getMaxDurability()) {
                         addSound(player, Sound.RANDOM_BREAK);
                         item = new ItemBlock(Block.get(BlockID.AIR), 0, 0);
@@ -5333,4 +5344,9 @@ public class Level implements ChunkManager, Metadatable {
         private Block block;
         private BlockFace neighbor;
     }
+
+    public int getServerLoadLevelTick() {
+        return this.serverLoadLevelTick;
+    }
+
 }
