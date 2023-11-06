@@ -136,7 +136,7 @@ public class BlockChest extends BlockTransparentMeta implements Faceable, BlockE
 
     @Override
     public boolean place(@NotNull Item item, @NotNull Block block, @NotNull Block target, @NotNull BlockFace face, double fx, double fy, double fz, @Nullable Player player) {
-        int[] faces = {2, 5, 3, 4};
+        int[] faces = {2, 3, 0, 1};
         this.setDamage(faces[player != null ? player.getDirection().getHorizontalIndex() : 0]);
 
         CompoundTag nbt = new CompoundTag().putList(new ListTag<>("Items"));
@@ -190,17 +190,14 @@ public class BlockChest extends BlockTransparentMeta implements Faceable, BlockE
     @PowerNukkitXOnly
     @Since("1.19.60-r1")
     protected BlockEntityChest findPair() {
-        for (int side = 2; side <= 5; ++side) {
-            if ((this.getDamage() == 4 || this.getDamage() == 5) && (side == 4 || side == 5)) {
-                continue;
-            } else if ((this.getDamage() == 3 || this.getDamage() == 2) && (side == 2 || side == 3)) {
-                continue;
-            }
-            Block c = this.getSide(BlockFace.fromIndex(side));
-            if (c instanceof BlockChest && c.getDamage() == this.getDamage()) {
-                BlockEntity blockEntity = this.getLevel().getBlockEntity(c);
-                if (blockEntity instanceof BlockEntityChest blockEntityChest && !((BlockEntityChest) blockEntity).isPaired()) {
-                    return blockEntityChest;
+        BlockFace[] universe = CommonBlockProperties.CARDINAL_DIRECTION.getUniverse();
+        BlockFace thisFace = this.getPropertyValue(CommonBlockProperties.CARDINAL_DIRECTION);
+        for(var face : universe){
+            Block side = this.getSide(face);
+            if(side instanceof BlockChest chest){
+                BlockFace pairFace = side.getPropertyValue(CommonBlockProperties.CARDINAL_DIRECTION);
+                if(thisFace == pairFace){
+                    return chest.getBlockEntity();
                 }
             }
         }
