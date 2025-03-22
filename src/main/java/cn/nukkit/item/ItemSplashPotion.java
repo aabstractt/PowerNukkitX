@@ -1,7 +1,8 @@
 package cn.nukkit.item;
 
-import cn.nukkit.nbt.tag.CompoundTag;
+import cn.nukkit.Server;
 import cn.nukkit.entity.effect.PotionType;
+import cn.nukkit.nbt.tag.CompoundTag;
 
 public class ItemSplashPotion extends ProjectileItem {
     public ItemSplashPotion() {
@@ -49,7 +50,7 @@ public class ItemSplashPotion extends ProjectileItem {
 
     @Override
     public float getThrowForce() {
-        return 0.5f;
+        return Server.getInstance().getSettings().gameplaySettings().splashPotion().throwForce();
     }
 
     @Override

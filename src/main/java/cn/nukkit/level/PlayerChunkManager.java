@@ -1,7 +1,6 @@
 package cn.nukkit.level;
 
 import cn.nukkit.Player;
-import cn.nukkit.Server;
 import cn.nukkit.entity.Entity;
 import cn.nukkit.event.player.PlayerChunkRequestEvent;
 import cn.nukkit.level.format.IChunk;
@@ -77,17 +76,21 @@ public final class PlayerChunkManager {
     }
 
     public synchronized void tick() {
-        if (!player.isConnected()) return;
-        long currentLoaderChunkPosHashed;
+        if (!this.player.isConnected()) return;
+
         BlockVector3 floor = player.asBlockVector3();
-        if ((currentLoaderChunkPosHashed = Level.chunkHash(floor.x >> 4, floor.z >> 4)) != lastLoaderChunkPosHashed) {
-            lastLoaderChunkPosHashed = currentLoaderChunkPosHashed;
+
+        long currentLoaderChunkPosHashed = Level.chunkHash(floor.x >> 4, floor.z >> 4);
+        if (currentLoaderChunkPosHashed != this.lastLoaderChunkPosHashed) {
+            this.lastLoaderChunkPosHashed = currentLoaderChunkPosHashed;
+
             updateInRadiusChunks(player.getViewDistance(), floor);
             removeOutOfRadiusChunks();
             updateChunkSendingQueue();
         }
-        loadQueuedChunks(trySendChunkCountPerTick, false);
-        sendChunk();
+
+        this.loadQueuedChunks(this.trySendChunkCountPerTick, false);
+        this.sendChunk();
     }
 
     @ApiStatus.Internal
@@ -135,11 +138,11 @@ public final class PlayerChunkManager {
         for (Long hash : difference) {
             int x = Level.getHashX(hash);
             int z = Level.getHashZ(hash);
-            if (player.level.unregisterChunkLoader(player, x, z)) {
-                for (Entity entity : player.level.getChunkEntities(x, z).values()) {
-                    if (entity != player) {
-                        entity.despawnFrom(player);
-                    }
+            if (!player.level.unregisterChunkLoader(player, x, z)) continue;
+
+            for (Entity entity : player.level.getChunkEntities(x, z).values()) {
+                if (entity != player) {
+                    entity.despawnFrom(player);
                 }
             }
         }

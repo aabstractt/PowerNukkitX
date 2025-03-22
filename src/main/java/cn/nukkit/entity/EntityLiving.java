@@ -1,5 +1,6 @@
 package cn.nukkit.entity;
 
+import cn.nukkit.AdventureSettings;
 import cn.nukkit.Player;
 import cn.nukkit.Server;
 import cn.nukkit.block.Block;
@@ -20,7 +21,6 @@ import cn.nukkit.item.ItemTurtleHelmet;
 import cn.nukkit.level.GameRule;
 import cn.nukkit.level.Sound;
 import cn.nukkit.level.format.IChunk;
-import cn.nukkit.math.NukkitMath;
 import cn.nukkit.math.Vector3;
 import cn.nukkit.nbt.tag.CompoundTag;
 import cn.nukkit.nbt.tag.FloatTag;
@@ -31,7 +31,6 @@ import cn.nukkit.utils.TickCachedBlockIterator;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
 
 public abstract class EntityLiving extends Entity implements EntityDamageable {
     public final static float DEFAULT_SPEED = 0.1f;
@@ -109,6 +108,8 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
             if (lastCause != null && lastCause.getDamage() >= source.getDamage()) {
                 return false;
             }
+
+            if (source.getCause().equals(DamageCause.ENTITY_ATTACK)) return false;
         }
 
         if (isBlocking() && this.blockedByShield(source)) {
@@ -123,15 +124,19 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
                 }
 
                 //Critical hit
-                if (damager instanceof Player && !damager.onGround) {
-                    AnimatePacket animate = new AnimatePacket();
-                    animate.action = AnimatePacket.Action.CRITICAL_HIT;
-                    animate.eid = getId();
+                if (damager instanceof Player) {
+                    boolean flying = ((Player) damager).getAdventureSettings().get(AdventureSettings.Type.FLYING);
+                    if (!damager.isSprinting() && !flying && damager.fallDistance > 0 && !damager.hasEffect(EffectType.BLINDNESS) && !damager.isInsideOfWater()) {
 
-                    this.getLevel().addChunkPacket(damager.getChunkX(), damager.getChunkZ(), animate);
-                    this.getLevel().addSound(this, Sound.GAME_PLAYER_ATTACK_STRONG);
+                        AnimatePacket animate = new AnimatePacket();
+                        animate.action = AnimatePacket.Action.CRITICAL_HIT;
+                        animate.eid = getId();
 
-                    source.setDamage(source.getDamage() * 1.5f);
+                        this.getLevel().addChunkPacket(damager.getChunkX(), damager.getChunkZ(), animate);
+                        this.getLevel().addSound(this, Sound.GAME_PLAYER_ATTACK_STRONG);
+
+                        source.setDamage(source.getDamage() + (source.getDamage() / 2));
+                    }
                 }
 
                 if (damager.isOnFire() && !(damager instanceof Player)) {
@@ -200,7 +205,7 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
         if (manager != null) manager.onEntityDead(this);
 
         if (this.level.getGameRules().getBoolean(GameRule.DO_ENTITY_DROPS)) {
-            for (cn.nukkit.item.Item item : ev.getDrops()) {
+            for (Item item : ev.getDrops()) {
                 this.getLevel().dropItem(this, item);
             }
             this.getLevel().dropExpOrb(this, getExperienceDrops());
@@ -397,7 +402,7 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
      * @param speed 速度大小<br>Speed value
      */
     public void setMovementSpeed(float speed) {
-        this.movementSpeed = (float) NukkitMath.round(speed, 2);
+        this.movementSpeed = speed;
     }
 
     public int getAirTicks() {

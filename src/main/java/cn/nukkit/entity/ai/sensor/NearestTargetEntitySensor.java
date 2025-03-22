@@ -55,7 +55,7 @@ public class NearestTargetEntitySensor<T extends Entity> implements ISensor {
         this.period = period;
         if (allTargetFunction == null) this.allTargetFunction = null;
         else {
-            if (memories.size() >= 1 && allTargetFunction.length == memories.size()) {
+            if (!memories.isEmpty() && allTargetFunction.length == memories.size()) {
                 this.allTargetFunction = allTargetFunction;
             } else
                 throw new IllegalArgumentException("All Target Function must correspond to memories one by one");
@@ -69,51 +69,55 @@ public class NearestTargetEntitySensor<T extends Entity> implements ISensor {
         double maxRangeSquared = this.maxRange * this.maxRange;
 
         if (allTargetFunction == null && memories.size() == 1) {
-            var currentMemory = memories.get(0);
+            var currentMemory = memories.getFirst();
+
             var current = entity.getMemoryStorage().get(currentMemory);
             if (current != null && current.isAlive()) return;
 
             //寻找范围内最近的实体
             var entities = Collections.synchronizedList(new SortedList<>(Comparator.comparingDouble((Entity e) -> e.distanceSquared(entity))));
             for (Entity p : entity.getLevel().getEntities()) {
-                if (entity.distanceSquared(p) <= maxRangeSquared && entity.distanceSquared(p) >= minRangeSquared && !p.equals(entity)) {
-                    entities.add(p);
-                }
+                if (entity.distanceSquared(p) > maxRangeSquared || entity.distanceSquared(p) < minRangeSquared || p.equals(entity)) continue;
+
+                entities.add(p);
             }
 
             if (entities.isEmpty()) {
                 entity.getMemoryStorage().clear(currentMemory);
-            } else entity.getMemoryStorage().put(currentMemory, entities.get(0));
+            } else {
+                entity.getMemoryStorage().put(currentMemory, entities.get(0));
+            }
+
             return;
         }
-        if (allTargetFunction != null) {
-            List<List<Entity>> sortEntities = new ArrayList<>(memories.size());
+        if (allTargetFunction == null) return;
 
-            for (int i = 0, len = memories.size(); i < len; ++i) {
-                sortEntities.add(new SortedList<>(Comparator.comparingDouble((Entity e) -> e.distanceSquared(entity))));
-            }
+        List<List<Entity>> sortEntities = new ArrayList<>(memories.size());
 
-            for (Entity p : entity.getLevel().getEntities()) {
-                if (entity.distanceSquared(p) <= maxRangeSquared && entity.distanceSquared(p) >= minRangeSquared && !p.equals(entity)) {
-                    int i = 0;
-                    for (var targetFunction : allTargetFunction) {
-                        if (targetFunction.apply((T) p)) {
-                            sortEntities.get(i).add(p);
-                        }
-                        ++i;
+        for (int i = 0, len = memories.size(); i < len; ++i) {
+            sortEntities.add(new SortedList<>(Comparator.comparingDouble((Entity e) -> e.distanceSquared(entity))));
+        }
+
+        for (Entity p : entity.getLevel().getEntities()) {
+            if (entity.distanceSquared(p) <= maxRangeSquared && entity.distanceSquared(p) >= minRangeSquared && !p.equals(entity)) {
+                int i = 0;
+                for (var targetFunction : allTargetFunction) {
+                    if (targetFunction.apply((T) p)) {
+                        sortEntities.get(i).add(p);
                     }
+                    ++i;
                 }
             }
+        }
 
-            for (int i = 0, len = sortEntities.size(); i < len; ++i) {
-                var currentMemory = memories.get(i);
-                var current = entity.getMemoryStorage().get(currentMemory);
-                if (current != null && current.isAlive()) continue;
+        for (int i = 0, len = sortEntities.size(); i < len; ++i) {
+            var currentMemory = memories.get(i);
+            var current = entity.getMemoryStorage().get(currentMemory);
+            if (current != null && current.isAlive()) continue;
 
-                if (sortEntities.get(i).isEmpty()) {
-                    entity.getMemoryStorage().clear(currentMemory);
-                } else entity.getMemoryStorage().put(currentMemory, sortEntities.get(i).get(0));
-            }
+            if (sortEntities.get(i).isEmpty()) {
+                entity.getMemoryStorage().clear(currentMemory);
+            } else entity.getMemoryStorage().put(currentMemory, sortEntities.get(i).get(0));
         }
     }
 

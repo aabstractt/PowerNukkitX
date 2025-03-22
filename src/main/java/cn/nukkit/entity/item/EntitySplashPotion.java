@@ -1,7 +1,10 @@
 package cn.nukkit.entity.item;
 
+import cn.nukkit.Server;
+import cn.nukkit.config.ServerSettings;
 import cn.nukkit.entity.Entity;
-import cn.nukkit.entity.effect.EffectType;
+import cn.nukkit.entity.effect.Effect;
+import cn.nukkit.entity.effect.PotionType;
 import cn.nukkit.entity.mob.EntityBlaze;
 import cn.nukkit.entity.projectile.EntityProjectile;
 import cn.nukkit.event.entity.EntityDamageByEntityEvent;
@@ -12,8 +15,6 @@ import cn.nukkit.level.format.IChunk;
 import cn.nukkit.level.particle.Particle;
 import cn.nukkit.level.particle.SpellParticle;
 import cn.nukkit.nbt.tag.CompoundTag;
-import cn.nukkit.entity.effect.Effect;
-import cn.nukkit.entity.effect.PotionType;
 import cn.nukkit.utils.BlockColor;
 import org.jetbrains.annotations.NotNull;
 
@@ -48,20 +49,6 @@ public class EntitySplashPotion extends EntityProjectile {
         potionId = this.namedTag.getShort("PotionId");
 
         this.entityDataMap.put(AUX_VALUE_DATA, this.potionId);
-
-        /*Effect effect = Potion.getEffect(potionId, true); TODO: potion color
-
-        if(effect != null) {
-            int count = 0;
-            int[] c = effect.getColor();
-            count += effect.getAmplifier() + 1;
-
-            int r = ((c[0] * (effect.getAmplifier() + 1)) / count) & 0xff;
-            int g = ((c[1] * (effect.getAmplifier() + 1)) / count) & 0xff;
-            int b = ((c[2] * (effect.getAmplifier() + 1)) / count) & 0xff;
-
-            this.setDataProperty(new IntEntityData(Entity.DATA_UNKNOWN, (r << 16) + (g << 8) + b));
-        }*/
     }
 
     
@@ -83,12 +70,12 @@ public class EntitySplashPotion extends EntityProjectile {
 
     @Override
     protected float getGravity() {
-        return 0.05f;
+        return Server.getInstance().getSettings().gameplaySettings().splashPotion().gravity();
     }
 
     @Override
     protected float getDrag() {
-        return 0.01f;
+        return Server.getInstance().getSettings().gameplaySettings().splashPotion().drag();
     }
 
     @Override
@@ -97,25 +84,18 @@ public class EntitySplashPotion extends EntityProjectile {
     }
 
     protected void splash(Entity collidedWith) {
-        PotionType potion = PotionType.get(this.potionId);
-        PotionCollideEvent event = new PotionCollideEvent(potion, this);
+        PotionCollideEvent event = new PotionCollideEvent(PotionType.get(this.potionId), this);
         this.server.getPluginManager().callEvent(event);
 
-        if (event.isCancelled()) {
-            return;
-        }
+        if (event.isCancelled()) return;
 
         this.close();
 
-        potion = event.getPotion();
-        if (potion == null) {
-            return;
-        }
+        PotionType potion = event.getPotion();
+        if (potion == null) return;
 
-        if(potion.equals(PotionType.WATER)) {
-            if(collidedWith instanceof EntityBlaze blaze) {
-                blaze.attack(new EntityDamageByEntityEvent(this, blaze, EntityDamageEvent.DamageCause.MAGIC, 1));
-            }
+        if (potion.equals(PotionType.WATER) && collidedWith instanceof EntityBlaze) {
+            collidedWith.attack(new EntityDamageByEntityEvent(this, collidedWith, EntityDamageEvent.DamageCause.MAGIC, 1));
         }
 
         int[] color = new int[3];
@@ -145,21 +125,29 @@ public class EntitySplashPotion extends EntityProjectile {
         this.getLevel().addParticle(particle);
         this.getLevel().addSound(this, Sound.RANDOM_GLASS);
 
-        Entity[] entities = this.getLevel().getNearbyEntities(this.getBoundingBox().grow(4.125, 2.125, 4.125));
+        ServerSettings.SplashPotionSettings splashPotionSettings = Server.getInstance().getSettings().gameplaySettings().splashPotion();
+
+        //Entity[] entities = this.getLevel().getNearbyEntities(this.getBoundingBox().grow(4.125, 2.125, 4.125));
+        Entity[] entities = this.getLevel().getNearbyEntities(this.getBoundingBox().grow(
+                splashPotionSettings.growX(),
+                splashPotionSettings.growY(),
+                splashPotionSettings.growX()
+        ));
         for (Entity anEntity : entities) {
             double distance = anEntity.distanceSquared(this);
-            if (distance < 16) {
-                double splashDistance = anEntity.equals(collidedWith) ? 1 : 1 - Math.sqrt(distance) / 4;
-                potion.applyEffects(anEntity, true, splashDistance);
-            }
+            if (distance > splashPotionSettings.distance()) continue;
+
+            potion.applyEffects(
+                    anEntity,
+                    true,
+                    anEntity.equals(collidedWith) ? splashPotionSettings.equalsPotency() : 1 - Math.sqrt(distance) / splashPotionSettings.divisor()
+            );
         }
     }
 
     @Override
     public boolean onUpdate(int currentTick) {
-        if (this.closed) {
-            return false;
-        }
+        if (this.closed) return false;
 
         boolean hasUpdate = super.onUpdate(currentTick);
 

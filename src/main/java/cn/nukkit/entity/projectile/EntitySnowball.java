@@ -68,12 +68,12 @@ public class EntitySnowball extends EntityProjectile {
 
     @Override
     protected float getGravity() {
-        return 0.03f;
+        return Server.getInstance().getSettings().gameplaySettings().snowBall().gravity();
     }
 
     @Override
     protected float getDrag() {
-        return 0.01f;
+        return Server.getInstance().getSettings().gameplaySettings().snowBall().drag();
     }
 
     @Override

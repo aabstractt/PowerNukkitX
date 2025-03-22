@@ -3499,25 +3499,32 @@ public class Level implements Metadatable {
         for (long index : this.chunkSendQueue.keySet()) {
             int x = getHashX(index);
             int z = getHashZ(index);
-            final Int2ObjectNonBlockingMap<Player> players = this.chunkSendQueue.get(index);
-            if (players != null) {
-                final var pair = this.requireProvider().requestChunkData(x, z);
-                for (Player player : Objects.requireNonNull(players).values()) {
-                    if (player.isConnected()) {
-                        NetworkChunkPublisherUpdatePacket ncp = new NetworkChunkPublisherUpdatePacket();
-                        ncp.position = player.asBlockVector3();
-                        ncp.radius = player.getViewDistance() << 4;
-                        player.dataPacket(ncp);
 
-                        LevelChunkPacket pk = new LevelChunkPacket();
-                        pk.chunkX = x;
-                        pk.chunkZ = z;
-                        pk.dimension = getDimensionData().getDimensionId();
-                        pk.subChunkCount = pair.right();
-                        pk.data = pair.left();
-                        player.sendChunk(x, z, pk);
-                    }
+            IChunk chunk = this.getChunk(x, z, false);
+            if (chunk == null) continue;
+
+            final Int2ObjectNonBlockingMap<Player> players = this.chunkSendQueue.get(index);
+            if (players == null) continue;
+
+            final var pair = this.requireProvider().requestChunkData(x, z);
+            for (Player player : Objects.requireNonNull(players).values()) {
+                if (player.isConnected()) {
+                    NetworkChunkPublisherUpdatePacket ncp = new NetworkChunkPublisherUpdatePacket();
+                    ncp.position = player.asBlockVector3();
+                    ncp.radius = player.getViewDistance() << 4;
+                    player.dataPacket(ncp);
+
+                    LevelChunkPacket pk = new LevelChunkPacket();
+                    pk.chunkX = x;
+                    pk.chunkZ = z;
+                    pk.dimension = getDimensionData().getDimensionId();
+                    pk.subChunkCount = pair.right();
+                    pk.data = pair.left();
+                    player.sendChunk(x, z, pk);
+
+                    player.refreshBlockEntity(chunk);
                 }
+
                 this.chunkSendQueue.remove(index);
             }
         }

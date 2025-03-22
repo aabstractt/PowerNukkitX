@@ -8,14 +8,14 @@ import cn.nukkit.item.ItemBlock;
 import cn.nukkit.level.Sound;
 import cn.nukkit.math.BlockFace;
 import cn.nukkit.math.Vector3;
+import cn.nukkit.network.protocol.LevelSoundEventPacketV1;
 import cn.nukkit.utils.Faceable;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
-import java.util.ArrayList;
-import java.util.List;
 
-import static cn.nukkit.block.property.CommonBlockProperties.*;
+import static cn.nukkit.block.property.CommonBlockProperties.END_PORTAL_EYE_BIT;
+import static cn.nukkit.block.property.CommonBlockProperties.MINECRAFT_CARDINAL_DIRECTION;
 
 /**
  * @author Pub4Game
@@ -25,7 +25,8 @@ public class BlockEndPortalFrame extends BlockTransparent implements Faceable {
 
     public static final BlockProperties PROPERTIES = new BlockProperties(END_PORTAL_FRAME,
             MINECRAFT_CARDINAL_DIRECTION,
-            END_PORTAL_EYE_BIT);
+            END_PORTAL_EYE_BIT
+    );
 
     @Override
     @NotNull public BlockProperties getProperties() {
@@ -102,91 +103,45 @@ public class BlockEndPortalFrame extends BlockTransparent implements Faceable {
 
     @Override
     public boolean onActivate(@NotNull Item item, Player player, BlockFace blockFace, float fx, float fy, float fz) {
-        if (!this.isEndPortalEye() && player != null && item.getId().equals(Item.ENDER_EYE)) {
-            this.setEndPortalEye(true);
-            this.getLevel().setBlock(this, this, true, true);
-            this.getLevel().addSound(this, Sound.BLOCK_END_PORTAL_FRAME_FILL);
-            this.createPortal();
-            return true;
-        }
-        return false;
-    }
+        if (this.isEndPortalEye() || player == null || !item.getId().equals(Item.ENDER_EYE)) return false;
 
-    public void createPortal() {
-        Vector3 centerSpot = this.searchCenter(new ArrayList<>());
-        if (centerSpot != null) {
-            for (int x = -2; x <= 2; x++) {
-                for (int z = -2; z <= 2; z++) {
-                    if ((x == -2 || x == 2) && (z == -2 || z == 2))
-                        continue;
-                    if (x == -2 || x == 2 || z == -2 || z == 2) {
-                        if (!this.checkFrame(this.getLevel().getBlock(centerSpot.add(x, 0, z)), x, z)) {
-                            return;
-                        }
+        this.setEndPortalEye(true);
+        this.getLevel().setBlock(this, this, true, true);
+        this.getLevel().addSound(this, Sound.BLOCK_END_PORTAL_FRAME_FILL);
+
+        for (int i = 0; i < 4; i++) {
+            for (int j = -1; j <= 1; j++) {
+                Block block = this.getSide(BlockFace.fromHorizontalIndex(i), 2)
+                        .getSide(BlockFace.fromHorizontalIndex((i + 1) % 4), j);
+                if (!this.isCompletedPortal(block)) continue;
+
+                for (int k = -1; k <= 1; k++) {
+                    for (int l = -1; l <= 1; l++) {
+                        this.getLevel().setBlock(block.add(k, 0, l), Block.get(Block.END_PORTAL), true);
                     }
                 }
-            }
 
-            for (int x = -1; x <= 1; x++) {
-                for (int z = -1; z <= 1; z++) {
-                    Vector3 vector3 = centerSpot.add(x, 0, z);
-                    if (!this.getLevel().getBlock(vector3).isAir()) {
-                        this.getLevel().useBreakOn(vector3);
-                    }
-                    this.getLevel().setBlock(vector3, Block.get(Block.END_PORTAL));
-                }
+                this.getLevel().addLevelSoundEvent(this, LevelSoundEventPacketV1.SOUND_BLOCK_END_PORTAL_SPAWN);
+
+                return true;
             }
         }
+
+        return true;
     }
 
-    private Vector3 searchCenter(List<Block> visited) {
-        for (int x = -2; x <= 2; x++) {
-            if (x == 0)
-                continue;
-            Block block = this.getLevel().getBlock(this.add(x, 0, 0));
-            Block iBlock = this.getLevel().getBlock(this.add(x * 2, 0, 0));
-            if (this.checkFrame(block) && !visited.contains(block)) {
-                visited.add(block);
-                if ((x == -1 || x == 1) && this.checkFrame(iBlock))
-                    return ((BlockEndPortalFrame) block).searchCenter(visited);
-                for (int z = -4; z <= 4; z++) {
-                    if (z == 0)
-                        continue;
-                    block = this.getLevel().getBlock(this.add(x, 0, z));
-                    if (this.checkFrame(block)) {
-                        return this.add((double) x / 2, 0, (double) z / 2);
-                    }
-                }
+    private boolean isCompletedPortal(@NotNull Block center) {
+        for (int i = 0; i < 4; i++) {
+            for (int j = -1; j <= 1; j++) {
+                Block block = center.getSide(BlockFace.fromHorizontalIndex(i), 2)
+                        .getSide(BlockFace.fromHorizontalIndex((i + 1) % 4), j);
+                if (block instanceof BlockEndPortalFrame && ((BlockEndPortalFrame) block).isEndPortalEye()) continue;
+
+                return false;
             }
         }
-        for (int z = -2; z <= 2; z++) {
-            if (z == 0)
-                continue;
-            Block block = this.getLevel().getBlock(this.add(0, 0, z));
-            Block iBlock = this.getLevel().getBlock(this.add(0, 0, z * 2));
-            if (this.checkFrame(block) && !visited.contains(block)) {
-                visited.add(block);
-                if ((z == -1 || z == 1) && this.checkFrame(iBlock))
-                    return ((BlockEndPortalFrame) block).searchCenter(visited);
-                for (int x = -4; x <= 4; x++) {
-                    if (x == 0)
-                        continue;
-                    block = this.getLevel().getBlock(this.add(x, 0, z));
-                    if (this.checkFrame(block)) {
-                        return this.add((double) x / 2, 0, (double) z / 2);
-                    }
-                }
-            }
-        }
-        return null;
-    }
 
-    private boolean checkFrame(Block block) {
-        return block.getId().equals(this.getId()) && ((BlockEndPortalFrame) block).isEndPortalEye();
-    }
-
-    private boolean checkFrame(Block block, int x, int z) {
-        return block.getId().equals(this.getId()) && (block.blockstate.specialValue() - 4) == (x == -2 ? 3 : x == 2 ? 1 : z == -2 ? 0 : z == 2 ? 2 : -1);
+        return true;
     }
 
     @Override
@@ -216,6 +171,7 @@ public class BlockEndPortalFrame extends BlockTransparent implements Faceable {
         } else {
             setBlockFace(player.getDirection().getOpposite());
         }
+
         this.getLevel().setBlock(block, this, true);
         return true;
     }

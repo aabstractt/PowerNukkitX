@@ -1,7 +1,6 @@
 package cn.nukkit.inventory.fake;
 
 import cn.nukkit.Player;
-import cn.nukkit.Server;
 import cn.nukkit.event.inventory.ItemStackRequestActionEvent;
 import cn.nukkit.inventory.BaseInventory;
 import cn.nukkit.inventory.InputInventory;
@@ -12,7 +11,6 @@ import cn.nukkit.item.Item;
 import cn.nukkit.math.Vector3;
 import cn.nukkit.network.protocol.ContainerClosePacket;
 import cn.nukkit.network.protocol.ContainerOpenPacket;
-import cn.nukkit.network.protocol.types.inventory.FullContainerName;
 import cn.nukkit.network.protocol.types.itemstack.ContainerSlotType;
 import cn.nukkit.network.protocol.types.itemstack.request.ItemStackRequestSlotData;
 import cn.nukkit.network.protocol.types.itemstack.request.action.DropAction;
@@ -167,23 +165,23 @@ public class FakeInventory extends BaseInventory implements InputInventory {
         } else if(action instanceof DropAction dropAction) {
             source = dropAction.getSource();
         }
-        if (source != null) {
-            ContainerSlotType sourceSlotType = source.getContainerName().getContainer();
-            Inventory sourceI = NetworkMapping.getInventory(event.getPlayer(), sourceSlotType);
-            int sourceSlot = sourceI.fromNetworkSlot(source.getSlot());
-            Item sourItem = sourceI.getItem(sourceSlot);
-            if (sourceI.equals(this)) {
-                ItemHandler handler = this.handlers.getOrDefault(sourceSlot, this.defaultItemHandler);
-                handler.handle(this, sourceSlot, sourItem, Item.AIR, event);
-            } else if(destination != null) {
-                ContainerSlotType destinationSlotType = destination.getContainerName().getContainer();
-                Inventory destinationI = NetworkMapping.getInventory(event.getPlayer(), destinationSlotType);
-                int destinationSlot = destinationI.fromNetworkSlot(destination.getSlot());
-                Item destItem = destinationI.getItem(destinationSlot);
-                if (destinationI.equals(this)) {
-                    ItemHandler handler = this.handlers.getOrDefault(destinationSlot, this.defaultItemHandler);
-                    handler.handle(this, destinationSlot, destItem, sourItem, event);
-                }
+        if (source == null) return;
+
+        ContainerSlotType sourceSlotType = source.getContainerName().getContainer();
+        Inventory sourceI = NetworkMapping.getInventory(event.getPlayer(), sourceSlotType);
+        int sourceSlot = sourceI.fromNetworkSlot(source.getSlot());
+        Item sourItem = sourceI.getItem(sourceSlot);
+        if (sourceI.equals(this)) {
+            ItemHandler handler = this.handlers.getOrDefault(sourceSlot, this.defaultItemHandler);
+            handler.handle(this, sourceSlot, sourItem, Item.AIR, event);
+        } else if(destination != null) {
+            ContainerSlotType destinationSlotType = destination.getContainerName().getContainer();
+            Inventory destinationI = NetworkMapping.getInventory(event.getPlayer(), destinationSlotType);
+            int destinationSlot = destinationI.fromNetworkSlot(destination.getSlot());
+            Item destItem = destinationI.getItem(destinationSlot);
+            if (destinationI.equals(this)) {
+                ItemHandler handler = this.handlers.getOrDefault(destinationSlot, this.defaultItemHandler);
+                handler.handle(this, destinationSlot, destItem, sourItem, event);
             }
         }
     }

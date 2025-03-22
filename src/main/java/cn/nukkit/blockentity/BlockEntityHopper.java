@@ -18,6 +18,7 @@ import cn.nukkit.inventory.SmeltingInventory;
 import cn.nukkit.item.Item;
 import cn.nukkit.item.ItemPotion;
 import cn.nukkit.item.ItemSplashPotion;
+import cn.nukkit.level.Level;
 import cn.nukkit.level.Position;
 import cn.nukkit.level.format.IChunk;
 import cn.nukkit.math.AxisAlignedBB;
@@ -226,10 +227,13 @@ public class BlockEntityHopper extends BlockEntitySpawnable implements BlockEnti
             return false;
         }
 
-        Block blockSide = this.getSide(BlockFace.UP).getTickCachedLevelBlock();
-        BlockEntity blockEntity = this.level.getBlockEntity(temporalVector.setComponentsAdding(this, BlockFace.UP));
+        Level level = this.getLocation().getLevel();
+        if (level == null) return false;
 
-        if (this.getLocation().getLevel() == null) return true;
+        Block blockSide = this.getSide(BlockFace.UP).getTickCachedLevelBlock();
+        BlockEntity blockEntity = level.getBlockEntity(temporalVector.setComponentsAdding(this, BlockFace.UP));
+
+        if (this.getLocation().getLevel() == null) return false;
 
         boolean changed = pushItems() || pushItemsIntoMinecart();
 

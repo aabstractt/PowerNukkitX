@@ -1062,7 +1062,7 @@ public abstract class Block extends Position implements Metadatable, AxisAligned
             f = BlockFace.SOUTH;
         }
 
-        return MovingObjectPosition.fromBlock((int) this.x, (int) this.y, (int) this.z, f, vector.add(this.x, this.y, this.z));
+        return MovingObjectPosition.fromBlock((int) this.x, (int) this.y, (int) this.z, f, vector.clone());
     }
 
     public String getSaveId() {

@@ -1,5 +1,7 @@
 package cn.nukkit.item;
 
+import cn.nukkit.Server;
+
 /**
  * @author MagicDroidX (Nukkit Project)
  */
@@ -29,6 +31,6 @@ public class ItemSnowball extends ProjectileItem {
 
     @Override
     public float getThrowForce() {
-        return 1.5f;
+        return Server.getInstance().getSettings().gameplaySettings().snowBall().throwForce();
     }
 }

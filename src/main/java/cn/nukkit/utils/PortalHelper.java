@@ -102,9 +102,10 @@ public final class PortalHelper implements BlockID {
     public static Position convertPosBetweenNetherAndOverworld(Position current) {
         DimensionData dimensionData;
         if (current.level.getDimension() == DIMENSION_OVERWORLD) {
-            dimensionData = DimensionEnum.NETHER.getDimensionData();
             Level netherLevel = current.getLevel().getDimensionDestinationLevel(DIMENSION_NETHER);
             if(netherLevel == null) return null;
+
+            dimensionData = DimensionEnum.NETHER.getDimensionData();
             return new Position(current.getFloorX() >> 3, NukkitMath.clamp(current.getFloorY(), dimensionData.getMinHeight(), dimensionData.getMaxHeight()) + 1, current.getFloorZ() >> 3, netherLevel);
         } else if (current.level.getDimension() == Level.DIMENSION_NETHER) {
             dimensionData = DimensionEnum.OVERWORLD.getDimensionData();
@@ -114,9 +115,13 @@ public final class PortalHelper implements BlockID {
             int z = current.getFloorZ() << 3;
             int y = overworldLevel.getHighestBlockAt(x, z);
             for(int i = overworldLevel.getMinHeight(); i < y; i++) {
-                if(overworldLevel.getBlock(x, i, z) instanceof BlockPortal) y = i;
+                if (!(overworldLevel.getBlock(x, i, z) instanceof BlockPortal)) continue;
+
+                y = i;
+
                 break;
             }
+
             return new Position(x, NukkitMath.clamp(y, dimensionData.getMinHeight(), dimensionData.getMaxHeight()) + 1, z, overworldLevel);
         } else {
             throw new IllegalArgumentException("Neither overworld nor nether given!");

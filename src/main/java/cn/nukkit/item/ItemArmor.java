@@ -53,12 +53,7 @@ abstract public class ItemArmor extends Item implements ItemDurable {
     public boolean onClickAir(Player player, Vector3 directionVector) {
         boolean equip = false;
         Item oldSlotItem = Item.AIR;
-        if (this.isHelmet()) {
-            oldSlotItem = player.getInventory().getHelmet();
-            if (player.getInventory().setHelmet(this)) {
-                equip = true;
-            }
-        } else if (this.isChestplate()) {
+        if (this.isChestplate()) {
             oldSlotItem = player.getInventory().getChestplate();
             if (player.getInventory().setChestplate(this)) {
                 equip = true;
@@ -99,6 +94,9 @@ abstract public class ItemArmor extends Item implements ItemDurable {
                 default:
                     player.getLevel().addSound(player, Sound.ARMOR_EQUIP_GENERIC);
             }
+        } else {
+            player.getInventory().sendArmorContents(player);
+            player.getInventory().sendContents(player);
         }
 
         return this.getCount() == 0;

@@ -179,5 +179,62 @@ public final class ServerSettings extends OkaeriConfig {
     public static class GameplaySettings extends OkaeriConfig {
         @Comment("nukkit.server.settings.gameplaysettings.enableCommandBlocks")
         boolean enableCommandBlocks = true;
+
+        @Comment("nukkit.server.settings.gameplaysettings.splashPotion")
+        SplashPotionSettings splashPotion = new SplashPotionSettings();
+
+        @Comment("nukkit.server.settings.gameplaysettings.enderPearl")
+        EnderPearlSettings enderPearl = new EnderPearlSettings();
+
+        @Comment("nukkit.server.settings.gameplaysettings.snowBall")
+        SnowBallSettings snowBall = new SnowBallSettings();
+    }
+
+    @EqualsAndHashCode(callSuper = true)
+    @Data
+    @Accessors(fluent = true)
+    public static class SplashPotionSettings extends OkaeriConfig {
+        @Comment("nukkit.server.settings.splash-potion.grow-x")
+        double growX = 4.125;
+        @Comment("nukkit.server.settings.splash-potion.grow-y")
+        double growY = 2.125;
+        @Comment("nukkit.server.settings.splash-potion.grow-z")
+        double growZ = 4.125;
+        @Comment("nukkit.server.settings.splash-potion.equals-potency")
+        double equalsPotency = 1.0;
+        @Comment("nukkit.server.settings.splash-potion.distance")
+        double distance = 16;
+        @Comment("nukkit.server.settings.splash-potion.divisor")
+        int divisor = 4;
+        @Comment("nukkit.server.settings.splash-potion.gravity")
+        float gravity = 0.04f;
+        @Comment("nukkit.server.settings.splash-potion.drag")
+        float drag = 0.02f;
+        @Comment("nukkit.server.settings.splash-potion.throw-force")
+        float throwForce = 0.5f;
+    }
+
+    @EqualsAndHashCode(callSuper = true)
+    @Data
+    @Accessors(fluent = true)
+    public static class EnderPearlSettings extends OkaeriConfig {
+        @Comment("nukkit.server.settings.ender-pearl.gravity")
+        float gravity = 0.04f;
+        @Comment("nukkit.server.settings.ender-pearl.drag")
+        float drag = 0.015f;
+        @Comment("nukkit.server.settings.ender-pearl.throw-force")
+        float throwForce = 2.0f;
+    }
+
+    @EqualsAndHashCode(callSuper = true)
+    @Data
+    @Accessors(fluent = true)
+    public static class SnowBallSettings extends OkaeriConfig {
+        @Comment("nukkit.server.settings.snow-ball.gravity")
+        float gravity = 0.04f;
+        @Comment("nukkit.server.settings.snow-ball.drag")
+        float drag = 0.015f;
+        @Comment("nukkit.server.settings.snow-ball.throw-force")
+        float throwForce = 2.0f;
     }
 }

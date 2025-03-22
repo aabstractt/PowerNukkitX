@@ -8,10 +8,13 @@ import cn.nukkit.level.format.IChunk;
 import cn.nukkit.nbt.NBTIO;
 import cn.nukkit.nbt.tag.CompoundTag;
 import cn.nukkit.nbt.tag.ListTag;
+import org.jetbrains.annotations.Nullable;
 
 public abstract class BlockEntitySpawnableContainer extends BlockEntitySpawnable implements BlockEntityInventoryHolder {
-    protected ContainerInventory inventory;
 
+    protected @Nullable String name;
+
+    protected ContainerInventory inventory;
 
     public BlockEntitySpawnableContainer(IChunk chunk, CompoundTag nbt) {
         super(chunk, nbt);

@@ -2,6 +2,7 @@ package cn.nukkit.entity.projectile;
 
 import cn.nukkit.Player;
 import cn.nukkit.block.Block;
+import cn.nukkit.block.BlockFenceGate;
 import cn.nukkit.entity.Entity;
 import cn.nukkit.entity.EntityLiving;
 import cn.nukkit.entity.item.EntityBoat;
@@ -18,11 +19,11 @@ import cn.nukkit.level.Position;
 import cn.nukkit.level.format.IChunk;
 import cn.nukkit.level.vibration.VibrationEvent;
 import cn.nukkit.level.vibration.VibrationType;
-import cn.nukkit.math.AxisAlignedBB;
 import cn.nukkit.math.BlockFace;
 import cn.nukkit.math.NukkitMath;
 import cn.nukkit.math.Vector3;
 import cn.nukkit.nbt.tag.CompoundTag;
+import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 import java.util.Optional;
@@ -47,6 +48,12 @@ public abstract class EntityProjectile extends Entity {
      */
     private boolean noAge;
 
+    private @Nullable BlockFace shootingDirection;
+
+    private @Nullable Vector3 initialPosition;
+
+    protected @Nullable Vector3 finalPosition;
+
     public EntityProjectile(IChunk chunk, CompoundTag nbt) {
         this(chunk, nbt, null);
     }
@@ -56,6 +63,8 @@ public abstract class EntityProjectile extends Entity {
         this.shootingEntity = shootingEntity;
         if (shootingEntity != null) {
             this.setDataProperty(OWNER_EID, shootingEntity.getId());
+
+            this.shootingDirection = shootingEntity.getDirection();
         }
     }
 
@@ -84,9 +93,7 @@ public abstract class EntityProjectile extends Entity {
         ProjectileHitEvent projectileHitEvent = new ProjectileHitEvent(this, MovingObjectPosition.fromEntity(entity));
         this.server.getPluginManager().callEvent(projectileHitEvent);
 
-        if (projectileHitEvent.isCancelled()) {
-            return;
-        }
+        if (projectileHitEvent.isCancelled()) return;
 
         this.level.getVibrationManager().callVibrationEvent(new VibrationEvent(this, this.getVector3(), VibrationType.PROJECTILE_LAND));
 
@@ -130,6 +137,10 @@ public abstract class EntityProjectile extends Entity {
         if (this.namedTag.contains("Age") && !this.noAge) {
             this.age = this.namedTag.getShort("Age");
         }
+
+        this.initialPosition = this.getPosition();
+
+        System.out.println("Initial position: " + this.initialPosition);
     }
 
     @Override
@@ -167,93 +178,112 @@ public abstract class EntityProjectile extends Entity {
 
     @Override
     public boolean onUpdate(int currentTick) {
-        if (this.closed) {
-            return false;
-        }
+        if (this.closed) return false;
 
         int tickDiff = currentTick - this.lastUpdate;
-        if (tickDiff <= 0 && !this.justCreated) {
-            return true;
-        }
+        if (tickDiff <= 0 && !this.justCreated) return true;
+
         this.lastUpdate = currentTick;
 
         boolean hasUpdate = this.entityBaseTick(tickDiff);
+        if (!this.isAlive()) return hasUpdate;
 
-        if (this.isAlive()) {
+        MovingObjectPosition movingObjectPosition = null;
 
-            MovingObjectPosition movingObjectPosition = null;
-
-            if (!this.isCollided) {
-                updateMotion();
-            }
-
-            Vector3 moveVector = new Vector3(this.x + this.motionX, this.y + this.motionY, this.z + this.motionZ);
-
-            Entity[] list = this.getLevel().getCollidingEntities(this.getBoundingBox().addCoord(this.motionX, this.motionY, this.motionZ).expand(1, 1, 1), this);
-
-            double nearDistance = Integer.MAX_VALUE;
-            Entity nearEntity = null;
-
-            for (Entity entity : list) {
-                if (!collideEntityFilter(entity)) {
-                    continue;
-                }
-
-                AxisAlignedBB axisalignedbb = entity.getBoundingBox().grow(0.3, 0.3, 0.3);
-                MovingObjectPosition ob = axisalignedbb.calculateIntercept(this, moveVector);
-
-                if (ob == null) {
-                    continue;
-                }
-
-                double distance = this.distanceSquared(ob.hitVector);
-
-                if (distance < nearDistance) {
-                    nearDistance = distance;
-                    nearEntity = entity;
-                }
-            }
-
-            if (nearEntity != null) {
-                movingObjectPosition = MovingObjectPosition.fromEntity(nearEntity);
-            }
-
-            if (movingObjectPosition != null) {
-                if (movingObjectPosition.entityHit != null) {
-                    onCollideWithEntity(movingObjectPosition.entityHit);
-                    hasUpdate = true;
-                    if (closed) {
-                        return true;
-                    }
-                }
-            }
-
-            Position position = getPosition();
-            Vector3 motion = getMotion();
-            this.move(this.motionX, this.motionY, this.motionZ);
-
-            if (this.isCollided && !this.hadCollision) { //collide with block
-                this.hadCollision = true;
-
-                this.motionX = 0;
-                this.motionY = 0;
-                this.motionZ = 0;
-
-                this.server.getPluginManager().callEvent(new ProjectileHitEvent(this, MovingObjectPosition.fromBlock(this.getFloorX(), this.getFloorY(), this.getFloorZ(), BlockFace.UP, this)));
-                onCollideWithBlock(position, motion);
-                addHitEffect();
-                return false;
-            } else if (!this.isCollided && this.hadCollision) {
-                this.hadCollision = false;
-            }
-
-            if (!this.hadCollision || Math.abs(this.motionX) > 0.00001 || Math.abs(this.motionY) > 0.00001 || Math.abs(this.motionZ) > 0.00001) {
-                updateRotation();
-                hasUpdate = true;
-            }
-
-            this.updateMovement();
+        if (!this.isCollided) {
+            updateMotion();
         }
+
+        Vector3 destination = new Vector3(this.x + this.motionX, this.y + this.motionY, this.z + this.motionZ);
+
+        Entity[] list = this.getLevel().getCollidingEntities(this.getBoundingBox().addCoord(this.motionX, this.motionY, this.motionZ).expand(1, 1, 1), this);
+
+        double nearDistance = Integer.MAX_VALUE;
+        Entity nearEntity = null;
+        for (Entity entity : list) {
+            if (!collideEntityFilter(entity)) continue;
+
+            MovingObjectPosition ob = entity.getBoundingBox().grow(0.3, 0.3, 0.3).calculateIntercept(this, destination);
+            if (ob == null) continue;
+
+            double distance = this.distanceSquared(ob.hitVector);
+            if (distance < nearDistance) {
+                nearDistance = distance;
+                nearEntity = entity;
+            }
+        }
+
+        if (nearEntity != null) {
+            movingObjectPosition = MovingObjectPosition.fromEntity(nearEntity);
+        }
+
+        if (movingObjectPosition != null && movingObjectPosition.entityHit != null) {
+            onCollideWithEntity(movingObjectPosition.entityHit);
+
+            hasUpdate = true;
+            if (closed) return true;
+        }
+
+        Position position = getPosition();
+        Vector3 motion = getMotion();
+        this.move(this.motionX, this.motionY, this.motionZ);
+
+        if (this.isCollided && !this.hadCollision && this.initialPosition != null) {
+            Block block = this.level.getBlock(destination);
+
+            if (this.canPassThrough(block, destination, position)) {
+                this.isCollided = this.isCollidedVertically = this.isCollidedHorizontally = this.onGround = false;
+
+                this.updateMovement();
+
+                return hasUpdate;
+            }
+
+            //collide with block
+            this.hadCollision = true;
+
+            this.motionX = 0;
+            this.motionY = 0;
+            this.motionZ = 0;
+
+            System.out.println("DEBUG: Projectile collided with block");
+            System.out.println("Initial position: " + this.initialPosition);
+            System.out.println("Destination: " + destination);
+            System.out.println("Position: " + position);
+
+            Vector3 finalDestination = this.getVector3();
+            if (this.level.getBlock(position).isAir()) {
+                finalDestination = position;
+            } else if (this.level.getBlock(destination).isAir()) {
+                finalDestination = destination;
+            }
+
+            if (finalDestination.y > this.initialPosition.y) {
+                for (int i = 0; i < 2; i++) {
+                    if (this.level.getBlock(finalDestination.add(0, i)).isAir()) continue;
+
+                    finalDestination = null;
+
+                    break;
+                }
+            }
+
+            if (finalDestination != null) this.finalPosition = Position.fromObject(finalDestination, this.level);
+
+            this.server.getPluginManager().callEvent(new ProjectileHitEvent(this, MovingObjectPosition.fromBlock(this.getFloorX(), this.getFloorY(), this.getFloorZ(), BlockFace.UP, this)));
+            onCollideWithBlock(position, motion);
+            addHitEffect();
+            return false;
+        } else if (!this.isCollided && this.hadCollision) {
+            this.hadCollision = false;
+        }
+
+        if (!this.hadCollision || Math.abs(this.motionX) > 0.00001 || Math.abs(this.motionY) > 0.00001 || Math.abs(this.motionZ) > 0.00001) {
+            updateRotation();
+            hasUpdate = true;
+        }
+
+        this.updateMovement();
 
         return hasUpdate;
     }
@@ -300,5 +330,19 @@ public abstract class EntityProjectile extends Entity {
         super.spawnToAll();
         //vibration: minecraft:projectile_shoot
         this.level.getVibrationManager().callVibrationEvent(new VibrationEvent(this.shootingEntity, this.getVector3(), VibrationType.PROJECTILE_SHOOT));
+    }
+
+    protected boolean canPassThrough(@NotNull Block block, @NotNull Vector3 destination, @Nullable Vector3 fallback) {
+        if (block instanceof BlockFenceGate && ((BlockFenceGate) block).isOpen()) return true;
+
+        /*System.out.println("DEBUG: Hit block: " + block.getName());
+        System.out.println("DEBUG: Hit position: " + movingObjectPosition.hitVector);
+        System.out.println("DEBUG: Distance Squared: " + destination.distanceSquared(movingObjectPosition.hitVector));*/
+
+        return false;
+
+        // TODO: Just handle this if the block of fallback is slab or stairs
+        /*if (fallback == null) return false;
+        if (fallbackBlock instanceof BlockSlab || fallbackBlock instanceof BlockStairs) return this.canPassThrough(block, fallback, null);*/
     }
 }

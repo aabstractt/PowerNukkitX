@@ -34,7 +34,10 @@ public interface BlockEntityHolder<E extends BlockEntity> {
         Class<? extends E> blockEntityClass = getBlockEntityClass();
         if (blockEntityClass.isInstance(blockEntity)) {
             return blockEntityClass.cast(blockEntity);
+        } else if (blockEntity == null) {
+            return this.createBlockEntity();
         }
+
         return null;
     }
 

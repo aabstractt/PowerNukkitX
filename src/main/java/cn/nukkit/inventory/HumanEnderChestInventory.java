@@ -22,7 +22,7 @@ public class HumanEnderChestInventory extends BaseInventory implements BlockEnti
     private BlockEntityEnderChest enderChest;
 
     public HumanEnderChestInventory(IHuman human) {
-        super(human, InventoryType.CONTAINER, 27);
+        super(human, InventoryType.CONTAINER, 27 * 2);
     }
 
     @Override

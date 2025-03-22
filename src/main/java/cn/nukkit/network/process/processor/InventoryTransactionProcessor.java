@@ -3,7 +3,6 @@ package cn.nukkit.network.process.processor;
 import cn.nukkit.AdventureSettings;
 import cn.nukkit.Player;
 import cn.nukkit.PlayerHandle;
-import cn.nukkit.Server;
 import cn.nukkit.block.Block;
 import cn.nukkit.block.BlockID;
 import cn.nukkit.blockentity.BlockEntity;
@@ -15,7 +14,11 @@ import cn.nukkit.entity.data.EntityFlag;
 import cn.nukkit.entity.item.EntityArmorStand;
 import cn.nukkit.event.entity.EntityDamageByEntityEvent;
 import cn.nukkit.event.entity.EntityDamageEvent;
-import cn.nukkit.event.player.*;
+import cn.nukkit.event.player.PlayerDropItemEvent;
+import cn.nukkit.event.player.PlayerHackDetectedEvent;
+import cn.nukkit.event.player.PlayerInteractEntityEvent;
+import cn.nukkit.event.player.PlayerInteractEvent;
+import cn.nukkit.event.player.PlayerKickEvent;
 import cn.nukkit.inventory.HumanInventory;
 import cn.nukkit.item.Item;
 import cn.nukkit.item.ItemBlock;
@@ -46,6 +49,8 @@ import java.util.Objects;
 public class InventoryTransactionProcessor extends DataPacketProcessor<InventoryTransactionPacket> {
     Item lastUsedItem = null;
 
+    static int lastHotbarSlot = -1;
+    static long lastHotbarTime = 0L;
 
     @Override
     public void handle(@NotNull PlayerHandle playerHandle, @NotNull InventoryTransactionPacket pk) {
@@ -109,6 +114,12 @@ public class InventoryTransactionProcessor extends DataPacketProcessor<Inventory
             return;
         }
 
+        /*if (hotbarSlot == lastHotbarSlot && System.currentTimeMillis() - lastHotbarTime <= 350L) {
+            player.getInventory().sendContents(player);
+
+            return;
+        }*/
+
         PlayerDropItemEvent ev;
         player.getServer().getPluginManager().callEvent(ev = new PlayerDropItemEvent(player, item));
         if (ev.isCancelled()) {
@@ -134,18 +145,26 @@ public class InventoryTransactionProcessor extends DataPacketProcessor<Inventory
     private void handleUseItemOnEntity(@NotNull PlayerHandle playerHandle, @NotNull InventoryTransactionPacket pk) {
         Player player = playerHandle.player;
         UseItemOnEntityData useItemOnEntityData = (UseItemOnEntityData) pk.transactionData;
-        Entity target = player.level.getEntity(useItemOnEntityData.entityRuntimeId);
-        if (target == null) {
+
+        int heldItemIndex = player.getInventory().getHeldItemIndex();
+        if (heldItemIndex != useItemOnEntityData.hotbarSlot) {
+            player.getInventory().equipItem(useItemOnEntityData.hotbarSlot);
+
             return;
         }
-        int type = useItemOnEntityData.actionType;
-        if (!useItemOnEntityData.itemInHand.equalsExact(player.getInventory().getItemInHand())) {
+
+        Entity target = player.level.getEntity(useItemOnEntityData.entityRuntimeId);
+        if (target == null) return;
+
+        Item itemInHand = player.getInventory().getItem(heldItemIndex);
+        if (!useItemOnEntityData.itemInHand.equals(itemInHand)) {
             player.getInventory().sendHeldItem(player);
         }
-        Item item = player.getInventory().getItemInHand();
+
+        int type = useItemOnEntityData.actionType;
         switch (type) {
             case InventoryTransactionPacket.USE_ITEM_ON_ENTITY_ACTION_INTERACT -> {
-                PlayerInteractEntityEvent playerInteractEntityEvent = new PlayerInteractEntityEvent(player, target, item, useItemOnEntityData.clickPos);
+                PlayerInteractEntityEvent playerInteractEntityEvent = new PlayerInteractEntityEvent(player, target, itemInHand, useItemOnEntityData.clickPos);
                 if (player.isSpectator()) playerInteractEntityEvent.setCancelled();
                 playerHandle.setInteract();
                 player.getServer().getPluginManager().callEvent(playerInteractEntityEvent);
@@ -157,24 +176,24 @@ public class InventoryTransactionProcessor extends DataPacketProcessor<Inventory
                 } else {
                     player.level.getVibrationManager().callVibrationEvent(new VibrationEvent(target, target.getLocation(), VibrationType.EQUIP));
                 }
-                if (target.onInteract(player, item, useItemOnEntityData.clickPos) && (player.isSurvival() || player.isAdventure())) {
-                    if (item.isTool()) {
-                        if (item.useOn(target) && item.getDamage() >= item.getMaxDurability()) {
+                if (target.onInteract(player, itemInHand, useItemOnEntityData.clickPos) && (player.isSurvival() || player.isAdventure())) {
+                    if (itemInHand.isTool()) {
+                        if (itemInHand.useOn(target) && itemInHand.getDamage() >= itemInHand.getMaxDurability()) {
                             player.getLevel().addSound(player, Sound.RANDOM_BREAK);
-                            item = new ItemBlock(Block.get(BlockID.AIR));
+                            itemInHand = new ItemBlock(Block.get(BlockID.AIR));
                         }
                     } else {
-                        if (item.count > 1) {
-                            item.count--;
+                        if (itemInHand.count > 1) {
+                            itemInHand.count--;
                         } else {
-                            item = new ItemBlock(Block.get(BlockID.AIR));
+                            itemInHand = new ItemBlock(Block.get(BlockID.AIR));
                         }
                     }
 
-                    if (item.isNull() || player.getInventory().getItemInHand().getId() == item.getId()) {
-                        player.getInventory().setItem(useItemOnEntityData.hotbarSlot, item);
+                    if (itemInHand.isNull() || Objects.equals(player.getInventory().getItemInHand().getId(), itemInHand.getId())) {
+                        player.getInventory().setItem(useItemOnEntityData.hotbarSlot, itemInHand);
                     } else {
-                        logTriedToSetButHadInHand(playerHandle, item, player.getInventory().getItemInHand());
+                        logTriedToSetButHadInHand(playerHandle, itemInHand, player.getInventory().getItemInHand());
                     }
                 } else {
                     //Otherwise nametag still gets consumed on client side
@@ -204,9 +223,9 @@ public class InventoryTransactionProcessor extends DataPacketProcessor<Inventory
                         return;
                     }
                 }
-                float itemDamage = item.getAttackDamage(player);
-                Enchantment[] enchantments = item.getEnchantments();
-                if (item.applyEnchantments()) {
+                float itemDamage = itemInHand.getAttackDamage(player);
+                Enchantment[] enchantments = itemInHand.getEnchantments();
+                if (itemInHand.applyEnchantments()) {
                     for (Enchantment enchantment : enchantments) {
                         itemDamage += enchantment.getDamageBonus(target, player);
                     }
@@ -214,14 +233,14 @@ public class InventoryTransactionProcessor extends DataPacketProcessor<Inventory
                 Map<EntityDamageEvent.DamageModifier, Float> damage = new EnumMap<>(EntityDamageEvent.DamageModifier.class);
                 damage.put(EntityDamageEvent.DamageModifier.BASE, itemDamage);
                 float knockBack = 0.3f;
-                if (item.applyEnchantments()) {
-                    Enchantment knockBackEnchantment = item.getEnchantment(Enchantment.ID_KNOCKBACK);
+                if (itemInHand.applyEnchantments()) {
+                    Enchantment knockBackEnchantment = itemInHand.getEnchantment(Enchantment.ID_KNOCKBACK);
                     if (knockBackEnchantment != null) {
                         knockBack += knockBackEnchantment.getLevel() * 0.1f;
                     }
                 }
-                EntityDamageByEntityEvent entityDamageByEntityEvent = new EntityDamageByEntityEvent(player, target, EntityDamageEvent.DamageCause.ENTITY_ATTACK, damage, knockBack, item.applyEnchantments() ? enchantments : null);
-                entityDamageByEntityEvent.setBreakShield(item.canBreakShield());
+                EntityDamageByEntityEvent entityDamageByEntityEvent = new EntityDamageByEntityEvent(player, target, EntityDamageEvent.DamageCause.ENTITY_ATTACK, damage, knockBack, itemInHand.applyEnchantments() ? enchantments : null);
+                entityDamageByEntityEvent.setBreakShield(itemInHand.canBreakShield());
                 if (player.isSpectator()) entityDamageByEntityEvent.setCancelled();
                 if ((target instanceof Player) && !player.level.getGameRules().getBoolean(GameRule.PVP)) {
                     entityDamageByEntityEvent.setCancelled();
@@ -236,7 +255,7 @@ public class InventoryTransactionProcessor extends DataPacketProcessor<Inventory
                 }
                 try {
                     if (!target.attack(entityDamageByEntityEvent)) {
-                        if (item.isTool() && player.isSurvival()) {
+                        if (itemInHand.isTool() && player.isSurvival()) {
                             player.getInventory().sendContents(player);
                         }
                         return;
@@ -246,16 +265,14 @@ public class InventoryTransactionProcessor extends DataPacketProcessor<Inventory
                         living.postAttack(player);
                     }
                 }
-                if (item.isTool() && (player.isSurvival() || player.isAdventure())) {
-                    if (item.useOn(target) && item.getDamage() >= item.getMaxDurability()) {
+                if (itemInHand.isTool() && (player.isSurvival() || player.isAdventure())) {
+                    if (itemInHand.useOn(target) && itemInHand.getDamage() >= itemInHand.getMaxDurability()) {
                         player.getLevel().addSound(player, Sound.RANDOM_BREAK);
                         player.getInventory().setItem(useItemOnEntityData.hotbarSlot, Item.AIR);
+                    } else if (itemInHand.isNull() || player.getInventory().getItemInHand().getId() == itemInHand.getId()) {
+                        player.getInventory().setItem(useItemOnEntityData.hotbarSlot, itemInHand);
                     } else {
-                        if (item.isNull() || player.getInventory().getItemInHand().getId() == item.getId()) {
-                            player.getInventory().setItem(useItemOnEntityData.hotbarSlot, item);
-                        } else {
-                            logTriedToSetButHadInHand(playerHandle, item, player.getInventory().getItemInHand());
-                        }
+                        logTriedToSetButHadInHand(playerHandle, itemInHand, player.getInventory().getItemInHand());
                     }
                 }
             }
@@ -343,6 +360,7 @@ public class InventoryTransactionProcessor extends DataPacketProcessor<Inventory
                 Item item;
                 Item useItemDataItem = useItemData.itemInHand;
                 Item serverItemInHand = player.getInventory().getItemInHand();
+
                 Vector3 directionVector = player.getDirectionVector();
                 // Removes Damage Tag that the client adds, but we do not store.
                 if(useItemDataItem.hasCompoundTag() && (!serverItemInHand.hasCompoundTag() || !serverItemInHand.getNamedTag().containsInt("Damage"))) {
@@ -353,13 +371,17 @@ public class InventoryTransactionProcessor extends DataPacketProcessor<Inventory
                 ////
                 if (player.isCreative()) {
                     item = serverItemInHand;
-                } else if (!player.getInventory().getItemInHand().equals(useItemDataItem)) {
-                    player.getServer().getLogger().debug("Item received did not match item in hand."); //Client seems to send multiple packets with the same durability.
+                } else if (!serverItemInHand.equals(useItemDataItem)) {
+                    player.getServer().getLogger().warning("Item received did not match item in hand.");
                     player.getInventory().sendHeldItem(player);
                     return;
                 } else {
                     item = serverItemInHand;
                 }
+
+                lastHotbarSlot = useItemData.hotbarSlot;
+                lastHotbarTime = System.currentTimeMillis();
+
                 PlayerInteractEvent interactEvent = new PlayerInteractEvent(player, item, directionVector, face, PlayerInteractEvent.Action.RIGHT_CLICK_AIR);
                 player.getServer().getPluginManager().callEvent(interactEvent);
                 playerHandle.setInteract();
@@ -370,6 +392,7 @@ public class InventoryTransactionProcessor extends DataPacketProcessor<Inventory
                     player.getInventory().sendSlot(useItemData.hotbarSlot, player);
                     return;
                 }
+
                 if (item.onClickAir(player, directionVector)) {
                     if (!player.isCreative()) {
                         if (item.isNull() || Objects.equals(player.getInventory().getItemInHand().getId(), item.getId())) {

@@ -152,15 +152,17 @@ public class BlockChest extends BlockTransparent implements Faceable, BlockEntit
      */
     protected boolean tryPair() {
         BlockEntityChest blockEntity = getBlockEntity();
-        if (blockEntity == null)
-            return false;
+        if (blockEntity == null) return false;
 
         BlockEntityChest chest = findPair();
-        if (chest == null)
-            return false;
+        if (chest == null || chest.isPaired()) return false;
 
         chest.pairWith(blockEntity);
         blockEntity.pairWith(chest);
+
+        blockEntity.spawnToAll();
+        chest.spawnToAll();
+
         return true;
     }
 
@@ -174,16 +176,14 @@ public class BlockChest extends BlockTransparent implements Faceable, BlockEntit
     protected @Nullable BlockEntityChest findPair() {
         List<MinecraftCardinalDirection> universe = CommonBlockProperties.MINECRAFT_CARDINAL_DIRECTION.getValidValues();
         BlockFace thisFace = getBlockFace();
-        for (var direction : universe) {
-            BlockFace directionFace = CommonPropertyMap.CARDINAL_BLOCKFACE.get(direction);
-            Block side = this.getSide(directionFace);
-            if (side instanceof BlockChest chest && directionFace.getAxis() != thisFace.getAxis()) {
-                BlockFace pairFace = chest.getBlockFace();
-                if (thisFace == pairFace) {
-                    return chest.getBlockEntity();
-                }
-            }
+        for (var face : universe) {
+            Block side = this.getSide(CommonPropertyMap.CARDINAL_BLOCKFACE.get(face));
+            if (!(side instanceof BlockChest chest)) continue;
+
+            BlockFace pairFace = chest.getBlockFace();
+            if (thisFace == pairFace) return chest.getBlockEntity();
         }
+
         return null;
     }
 
@@ -225,6 +225,8 @@ public class BlockChest extends BlockTransparent implements Faceable, BlockEntit
                 && !chest.namedTag.getString("Lock").equals(item.getCustomName())) {
             return false;
         }
+
+        if (!chest.isPaired()) this.tryPair();
 
         player.addWindow(chest.getInventory());
         return true;

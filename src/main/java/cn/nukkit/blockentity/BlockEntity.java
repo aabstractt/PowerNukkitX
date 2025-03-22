@@ -229,7 +229,8 @@ public abstract class BlockEntity extends Position implements BlockEntityID {
                 .putString("id", id)
                 .putInt("x", pos.getFloorX())
                 .putInt("y", pos.getFloorY())
-                .putInt("z", pos.getFloorZ());
+                .putInt("z", pos.getFloorZ())
+                .putBoolean("isMovable", true);
     }
 
     @Nullable

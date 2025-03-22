@@ -39,6 +39,8 @@ public class SetWorldSpawnCommand extends VanillaCommand {
             pos = result.getValue().getResult(0);
         }
         level.setSpawnLocation(pos);
+        level.save();
+
         DecimalFormat round2 = new DecimalFormat("##0.00");
         log.addSuccess("commands.setworldspawn.success", round2.format(pos.x),
                 round2.format(pos.y),

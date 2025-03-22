@@ -156,6 +156,10 @@ public abstract class Entity extends Location implements Metadatable, EntityID, 
     public boolean closed = false;
     public boolean noClip = false;
     /**
+     * If the entity can collide with other entities
+     */
+    public boolean canCollideWithEntities = true;
+    /**
      * spawned by server
      * <p>
      * player's UUID is sent by client,so this value cannot be used in Player
@@ -1082,18 +1086,25 @@ public abstract class Entity extends Location implements Metadatable, EntityID, 
     }
 
     public void sendData(Player[] players, EntityDataMap data) {
-        SetEntityDataPacket pk = new SetEntityDataPacket();
-        pk.eid = this.getId();
-        pk.entityData = data == null ? this.entityDataMap : data;
-        pk.syncedProperties = this.propertySyncData();
+        EntityDataMap entityDataMap = new EntityDataMap();
+        entityDataMap.putAll(data == null ? this.entityDataMap : data);
 
         for (Player player : players) {
-            if (player == this) {
-                continue;
-            }
+            SetEntityDataPacket pk = new SetEntityDataPacket();
+            pk.eid = this.getId();
+            pk.entityData = entityDataMap;
+            pk.syncedProperties = this.propertySyncData();
+
+            if (player == this) continue;
+
             player.dataPacket(pk);
         }
         if (this instanceof Player player) {
+            SetEntityDataPacket pk = new SetEntityDataPacket();
+            pk.eid = this.getId();
+            pk.entityData = entityDataMap;
+            pk.syncedProperties = this.propertySyncData();
+
             player.dataPacket(pk);
         }
     }
@@ -1283,7 +1294,7 @@ public abstract class Entity extends Location implements Metadatable, EntityID, 
     }
 
     public boolean canCollideWith(Entity entity) {
-        return !this.justCreated && this != entity && !this.noClip;
+        return !this.justCreated && this != entity && !this.noClip && this.canCollideWithEntities;
     }
 
     /**
@@ -1495,37 +1506,59 @@ public abstract class Entity extends Location implements Metadatable, EntityID, 
             }
         }
 
-        if (this.inPortalTicks == 80) {//handle portal teleport
-            EntityPortalEnterEvent ev = new EntityPortalEnterEvent(this, PortalType.NETHER);
-            getServer().getPluginManager().callEvent(ev);//call event
+        // handle nether portal
+        if (this.inPortalTicks == 80) this.netherPortal();
 
-            if (!ev.isCancelled() && (level.getDimension() == Level.DIMENSION_OVERWORLD || level.getDimension() == Level.DIMENSION_NETHER)) {
-
-                Position newPos = PortalHelper.convertPosBetweenNetherAndOverworld(this);
-                if(newPos != null) {
-                    IChunk destChunk = newPos.getChunk();
-                    if (!destChunk.isGenerated()) {
-                        newPos.getLevel().syncGenerateChunk(destChunk.getX(), destChunk.getZ());
-                        newPos = PortalHelper.convertPosBetweenNetherAndOverworld(this);
-                    }
-                    if (newPos != null) {
-                        Position nearestPortal = PortalHelper.getNearestValidPortal(newPos);
-                        if (nearestPortal != null) {
-                            teleport(nearestPortal.add(0.5, 0, 0.5), PlayerTeleportEvent.TeleportCause.NETHER_PORTAL);
-                        } else {
-                            final Position finalPos = newPos.add(1.5, 1, 1.5);
-                            inPortalTicks = 81;
-                            PortalHelper.spawnPortal(newPos);
-                            teleport(finalPos, PlayerTeleportEvent.TeleportCause.NETHER_PORTAL);
-                        }
-                    }
-                }
-            }
-        }
         this.age += tickDiff;
         this.ticksLived += tickDiff;
 
         return hasUpdate;
+    }
+
+    private void netherPortal() {
+        Position newPos = PortalHelper.convertPosBetweenNetherAndOverworld(this);
+        if (newPos == null) return;
+
+        Position nearestPortal = PortalHelper.getNearestValidPortal(newPos);
+        EntityPortalEnterEvent ev = new EntityPortalEnterEvent(
+                this,
+                PortalType.NETHER,
+                nearestPortal != null ? nearestPortal : newPos
+        );
+        getServer().getPluginManager().callEvent(ev);//call event
+        if (ev.isCancelled()) return;
+        if ((level.getDimension() != Level.DIMENSION_OVERWORLD && level.getDimension() != Level.DIMENSION_NETHER)) return;
+
+        Position destination = ev.getTo();
+        IChunk destChunk = destination.getChunk();
+        if(!destChunk.isGenerated()) {
+            newPos.getLevel().syncGenerateChunk(destChunk.getX(), destChunk.getZ());
+        }
+
+        if (destination.equals(nearestPortal)) {
+            teleport(nearestPortal.add(0.5, 0, 0.5), PlayerTeleportEvent.TeleportCause.NETHER_PORTAL);
+
+            return;
+        }
+
+        final Position finalPos = destination.add(1.5, 1, 1.5);
+        if (!teleport(finalPos, PlayerTeleportEvent.TeleportCause.NETHER_PORTAL)) {
+            return;
+        }
+
+        level.getScheduler().scheduleDelayedTask(new Task() {
+            @Override
+            public void onRun(int currentTick) {
+                // dirty hack to make sure chunks are loaded and generated before spawning
+                // player
+                inPortalTicks = 81;
+                teleport(finalPos, PlayerTeleportEvent.TeleportCause.NETHER_PORTAL);
+
+                if (!ev.canBuildPortal()) return;
+
+                PortalHelper.spawnPortal(destination);
+            }
+        }, 5);
     }
 
     public void updateMovement() {
@@ -2413,44 +2446,10 @@ public abstract class Entity extends Location implements Metadatable, EntityID, 
             }
         }
 
-        if (endPortal) {//handle endPortal teleport
-            if (!inEndPortal) {
-                inEndPortal = true;
-                if (this.getRiding() == null && this.getPassengers().isEmpty() && !(this instanceof EntityEnderDragon)) {
-                    EntityPortalEnterEvent ev = new EntityPortalEnterEvent(this, PortalType.END);
-                    getServer().getPluginManager().callEvent(ev);
-
-                    if (!ev.isCancelled() && (level.getDimension() == Level.DIMENSION_OVERWORLD || level.getDimension() == Level.DIMENSION_THE_END)) {
-                        final Position newPos = PortalHelper.convertPosBetweenEndAndOverworld(this);
-                        if (newPos != null) {
-                            if (newPos.getLevel().getDimension() == Level.DIMENSION_THE_END) {
-                                if (teleport(newPos.add(0.5, 1, 0.5), PlayerTeleportEvent.TeleportCause.END_PORTAL)) {
-                                    newPos.getLevel().getScheduler().scheduleDelayedTask(new Task() {
-                                        @Override
-                                        public void onRun(int currentTick) {
-                                            // dirty hack to make sure chunks are loaded and generated before spawning player
-                                            teleport(newPos.add(0.5, 1, 0.5), PlayerTeleportEvent.TeleportCause.END_PORTAL);
-                                            BlockEndPortal.spawnObsidianPlatform(newPos);
-                                        }
-                                    }, 5);
-                                }
-                            } else {
-                                if (teleport(newPos, PlayerTeleportEvent.TeleportCause.END_PORTAL)) {
-                                    newPos.getLevel().getScheduler().scheduleDelayedTask(new Task() {
-                                        @Override
-                                        public void onRun(int currentTick) {
-                                            // dirty hack to make sure chunks are loaded and generated before spawning player
-                                            teleport(newPos, PlayerTeleportEvent.TeleportCause.END_PORTAL);
-                                        }
-                                    }, 5);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+        if (endPortal) {
+            this.handleEndPortal();
         } else {
-            inEndPortal = false;
+            this.inEndPortal = false;
         }
 
         if (portal) {
@@ -2485,6 +2484,44 @@ public abstract class Entity extends Location implements Metadatable, EntityID, 
                 }
             }
         else ((EntityPhysical) this).addPreviousLiquidMovement();
+    }
+
+    protected void handleEndPortal() {
+        if (this.inEndPortal) return;
+
+        this.inEndPortal = true;
+        if (this.getRiding() != null || !this.getPassengers().isEmpty() || this instanceof EntityEnderDragon) return;
+        if (level.getDimension() != Level.DIMENSION_OVERWORLD && level.getDimension() != Level.DIMENSION_THE_END) return;
+
+        final Position newPos = PortalHelper.convertPosBetweenEndAndOverworld(this);
+        if (newPos == null) return;
+
+        EntityPortalEnterEvent ev = new EntityPortalEnterEvent(this, PortalType.END, newPos);
+        getServer().getPluginManager().callEvent(ev);
+        if (ev.isCancelled()) return;
+
+        Position destination = ev.getTo();
+        if (destination.getLevel().getDimension() == Level.DIMENSION_THE_END) {
+            if (teleport(destination.add(0.5, 1, 0.5), PlayerTeleportEvent.TeleportCause.END_PORTAL)) {
+                destination.getLevel().getScheduler().scheduleDelayedTask(new Task() {
+                    @Override
+                    public void onRun(int currentTick) {
+                        // dirty hack to make sure chunks are loaded and generated before spawning player
+                        teleport(destination.add(0.5, 1, 0.5), PlayerTeleportEvent.TeleportCause.END_PORTAL);
+
+                        if (ev.canBuildPortal()) BlockEndPortal.spawnObsidianPlatform(destination);
+                    }
+                }, 5);
+            }
+        } else if (teleport(destination, PlayerTeleportEvent.TeleportCause.END_PORTAL)) {
+            destination.getLevel().getScheduler().scheduleDelayedTask(new Task() {
+                @Override
+                public void onRun(int currentTick) {
+                    // dirty hack to make sure chunks are loaded and generated before spawning player
+                    teleport(destination, PlayerTeleportEvent.TeleportCause.END_PORTAL);
+                }
+            }, 5);
+        }
     }
 
     public boolean setPositionAndRotation(Vector3 pos, double yaw, double pitch) {

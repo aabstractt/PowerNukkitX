@@ -14,6 +14,8 @@ import cn.nukkit.block.BlockWool;
 import cn.nukkit.block.customblock.CustomBlock;
 import cn.nukkit.block.property.CommonBlockProperties;
 import cn.nukkit.blockentity.BlockEntity;
+import cn.nukkit.blockentity.BlockEntityCampfire;
+import cn.nukkit.blockentity.BlockEntityItemFrame;
 import cn.nukkit.blockentity.BlockEntitySign;
 import cn.nukkit.blockentity.BlockEntitySpawnable;
 import cn.nukkit.camera.data.CameraPreset;
@@ -81,6 +83,7 @@ import cn.nukkit.level.Location;
 import cn.nukkit.level.PlayerChunkManager;
 import cn.nukkit.level.Position;
 import cn.nukkit.level.Sound;
+import cn.nukkit.level.format.Chunk;
 import cn.nukkit.level.format.IChunk;
 import cn.nukkit.level.particle.PunchBlockParticle;
 import cn.nukkit.level.vibration.VibrationEvent;
@@ -556,8 +559,14 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
                     log.debug("Tried to set item " + handItem.getId() + " but " + this.getName() + " had item " + clone.getId() + " in their hand slot");
                 }
                 inventory.sendHeldItem(this.getViewers().values());
-            } else if (handItem == null)
+            } else if (handItem == null) {
                 this.level.sendBlocks(new Player[]{this}, new Block[]{this.level.getBlock(blockPos.asVector3())}, UpdateBlockPacket.FLAG_ALL_PRIORITY, 0);
+
+                BlockEntity blockEntity = this.getLevel().getBlockEntity(blockPos.asVector3());
+                if (blockEntity instanceof BlockEntitySpawnable) {
+                    ((BlockEntitySpawnable) blockEntity).spawnTo(this);
+                }
+            }
             return;
         }
 
@@ -797,39 +806,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
         setDataFlagExtend(EntityFlag.OVER_DESCENDABLE_BLOCK, scaffoldingUnder.length > 0);
 
         if (endPortal) {//handle endPortal teleport
-            if (!inEndPortal) {
-                inEndPortal = true;
-                if (this.getRiding() == null && this.getPassengers().isEmpty()) {
-                    EntityPortalEnterEvent ev = new EntityPortalEnterEvent(this, PortalType.END);
-                    getServer().getPluginManager().callEvent(ev);
-
-                    if (!ev.isCancelled()) {
-                        final Position newPos = PortalHelper.convertPosBetweenEndAndOverworld(this);
-                        if (newPos != null) {
-                            if (newPos.getLevel().getDimension() == Level.DIMENSION_THE_END) {
-                                if (teleport(newPos, TeleportCause.END_PORTAL)) {
-                                    newPos.getLevel().getScheduler().scheduleDelayedTask(new Task() {
-                                        @Override
-                                        public void onRun(int currentTick) {
-                                            // dirty hack to make sure chunks are loaded and generated before spawning player
-                                            teleport(newPos, TeleportCause.END_PORTAL);
-                                            BlockEndPortal.spawnObsidianPlatform(newPos);
-                                        }
-                                    }, 5);
-                                }
-                            } else {
-                                if (!this.hasSeenCredits && !this.showingCredits) {
-                                    PlayerShowCreditsEvent playerShowCreditsEvent = new PlayerShowCreditsEvent(this);
-                                    this.getServer().getPluginManager().callEvent(playerShowCreditsEvent);
-                                    if (!playerShowCreditsEvent.isCancelled()) {
-                                        this.showCredits();
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            this.handleEndPortal();
         } else {
             inEndPortal = false;
         }
@@ -1302,7 +1279,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
         this.sendData(this.hasSpawned.values().toArray(Player.EMPTY_ARRAY), entityDataMap);
         this.spawnToAll();
         Arrays.stream(this.level.getEntities()).filter(entity -> entity.getViewers().containsKey(this.getLoaderId()) && entity instanceof EntityBoss).forEach(entity -> ((EntityBoss) entity).addBossbar(this));
-        this.refreshBlockEntity(1);
+        this.refreshBlockEntity(this.chunk);
     }
 
     /**
@@ -1400,37 +1377,40 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
 
     @Override
     protected void checkChunks() {
-        if (this.chunk == null || (this.chunk.getX() != ((int) this.x >> 4) || this.chunk.getZ() != ((int) this.z >> 4))) {
-            if (this.chunk != null) {
-                this.chunk.removeEntity(this);
-            }
-            this.chunk = this.level.getChunk((int) this.x >> 4, (int) this.z >> 4, true);
+        int chunkX = this.getFloorX() >> 4;
+        int chunkZ = this.getFloorZ() >> 4;
 
-            if (!this.justCreated) {
-                Map<Integer, Player> newChunk = this.level.getChunkPlayers((int) this.x >> 4, (int) this.z >> 4);
-                newChunk.remove(this.getLoaderId());
+        if (this.chunk != null && (this.chunk.getX() == chunkX && this.chunk.getZ() == chunkZ)) return;
 
-                //List<Player> reload = new ArrayList<>();
-                for (Player player : new ArrayList<>(this.hasSpawned.values())) {
-                    if (!newChunk.containsKey(player.getLoaderId())) {
-                        this.despawnFrom(player);
-                    } else {
-                        newChunk.remove(player.getLoaderId());
-                        //reload.add(player);
-                    }
-                }
+        if (this.chunk != null) this.chunk.removeEntity(this);
 
-                for (Player player : newChunk.values()) {
-                    this.spawnTo(player);
+        this.chunk = this.level.getChunk(chunkX, chunkZ, true);
+
+        if (!this.justCreated) {
+            Map<Integer, Player> newChunk = this.level.getChunkPlayers(chunkX, chunkZ);
+            newChunk.remove(this.getLoaderId());
+
+            //List<Player> reload = new ArrayList<>();
+            for (Player player : new ArrayList<>(this.hasSpawned.values())) {
+                if (!newChunk.containsKey(player.getLoaderId())) {
+                    this.despawnFrom(player);
+                } else {
+                    newChunk.remove(player.getLoaderId());
+                    //reload.add(player);
                 }
             }
 
-            if (this.chunk == null) {
-                return;
+            for (Player player : newChunk.values()) {
+                this.spawnTo(player);
             }
-
-            this.chunk.addEntity(this);
         }
+
+        if (this.chunk == null) {
+            return;
+        }
+
+        this.chunk.addEntity(this);
+        //this.refreshBlockEntity(false);
     }
 
     protected void sendPlayStatus(int status) {
@@ -2139,6 +2119,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
      */
     public void setLastUseTick(@NotNull String itemId, int tick) {
         lastUseItemMap.put(itemId, tick);
+
         this.setDataFlag(EntityFlag.USING_ITEM, true);
     }
 
@@ -2728,19 +2709,6 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
                         String blockId = block.getId();
                         boolean ignore = blockId.equals(Block.LADDER) || blockId.equals(Block.VINE) || blockId.equals(Block.WEB)
                                 || blockId.equals(Block.SCAFFOLDING);// || (blockId == Block.SWEET_BERRY_BUSH && block.getDamage() > 0);
-
-                        if (!this.hasEffect(EffectType.JUMP_BOOST) && diff > 0.6 && expectedVelocity < this.speed.y && !ignore) {
-                            if (this.inAirTicks < 150) {
-                                PlayerInvalidMoveEvent ev = new PlayerInvalidMoveEvent(this, true);
-                                this.getServer().getPluginManager().callEvent(ev);
-
-                                if(!ev.isCancelled()) {
-                                    this.setMotion(new Vector3(0, expectedVelocity, 0));
-                                }
-                            } else if (this.kick(PlayerKickEvent.Reason.FLYING_DISABLED, "Flying is not enabled on this server")) {
-                                return false;
-                            }
-                        }
                         if (ignore) {
                             this.resetFallDistance();
                         }
@@ -3585,10 +3553,6 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
     }
 
     public void save(boolean async) {
-        if (this.closed) {
-            throw new IllegalStateException("Tried to save closed player");
-        }
-
         saveNBT();
 
         if (this.level != null) {
@@ -4095,7 +4059,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
      */
     @Override
     public void setMovementSpeed(float speed) {
-        setMovementSpeed(speed, true);
+        setMovementSpeed(speed, !this.isSneaking());
     }
 
     /**
@@ -4356,8 +4320,8 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
         this.positionChanged = true;
 
         if (switchLevel) {
-            refreshBlockEntity(10);
             refreshChunkRender();
+            refreshBlockEntity(this.chunk);
         }
         this.resetFallDistance();
         //DummyBossBar
@@ -4382,30 +4346,40 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
         this.setViewDistance(origin);
     }
 
-    public void refreshBlockEntity(int delay) {
-        getLevel().getScheduler().scheduleDelayedTask(InternalPlugin.INSTANCE, () -> {
-            for (var b : this.level.getBlockEntities().values()) {
-                if(b == null) continue;
-                if (b instanceof BlockEntitySpawnable blockEntitySpawnable) {
-                    UpdateBlockPacket setAir = new UpdateBlockPacket();
-                    setAir.blockRuntimeId = BlockAir.STATE.blockStateHash();
-                    setAir.flags = UpdateBlockPacket.FLAG_NETWORK;
-                    setAir.x = b.getFloorX();
-                    setAir.y = b.getFloorY();
-                    setAir.z = b.getFloorZ();
-                    this.dataPacket(setAir);
+    public void refreshBlockEntity(@Nullable IChunk chunk) {
+        Collection<BlockEntity> blockEntities;
+        if (chunk == null) {
+            blockEntities = this.level.getBlockEntities().values();
+        } else {
+            blockEntities = chunk.getBlockEntities().values();
+        }
 
-                    UpdateBlockPacket revertAir = new UpdateBlockPacket();
-                    revertAir.blockRuntimeId = b.getBlock().getRuntimeId();
-                    revertAir.flags = UpdateBlockPacket.FLAG_NETWORK;
-                    revertAir.x = b.getFloorX();
-                    revertAir.y = b.getFloorY();
-                    revertAir.z = b.getFloorZ();
-                    this.dataPacket(revertAir);
-                    blockEntitySpawnable.spawnTo(this);
-                }
-            }
-        }, delay, true);
+        getServer().getScheduler().scheduleDelayedTask(
+                InternalPlugin.INSTANCE, () -> {
+                    for (var blockEntity : blockEntities) {
+                        if (blockEntity == null) continue;
+
+                        if (blockEntity instanceof BlockEntitySpawnable blockEntitySpawnable) {
+                            UpdateBlockPacket setAir = new UpdateBlockPacket();
+                            setAir.blockRuntimeId = BlockAir.STATE.blockStateHash();
+                            setAir.flags = UpdateBlockPacket.FLAG_NETWORK;
+                            setAir.x = blockEntity.getFloorX();
+                            setAir.y = blockEntity.getFloorY();
+                            setAir.z = blockEntity.getFloorZ();
+                            this.dataPacket(setAir);
+
+                            UpdateBlockPacket revertAir = new UpdateBlockPacket();
+                            revertAir.blockRuntimeId = blockEntity.getBlock().getRuntimeId();
+                            revertAir.flags = UpdateBlockPacket.FLAG_NETWORK;
+                            revertAir.x = blockEntity.getFloorX();
+                            revertAir.y = blockEntity.getFloorY();
+                            revertAir.z = blockEntity.getFloorZ();
+                            this.dataPacket(revertAir);
+
+                            blockEntitySpawnable.spawnTo(this);
+                        }
+                    }
+        }, 40, true);
     }
 
     /**
@@ -4457,7 +4431,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
         this.formWindows.entrySet()
                 .stream()
                 .filter(f -> f.getValue().equals(form))
-                .map(Map.Entry::getKey)
+                .map(Entry::getKey)
                 .findFirst()
                 .ifPresent(id -> {
                     ServerSettingsResponsePacket packet = new ServerSettingsResponsePacket(); // Exploiting some (probably unintended) protocol features here
@@ -4953,11 +4927,6 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
         if (isSprinting() != value) {
             super.setSprinting(value);
             this.setMovementSpeed(value ? getMovementSpeed() * 1.3f : getMovementSpeed() / 1.3f);
-
-            if (this.hasEffect(EffectType.SPEED)) {
-                float movementSpeed = this.getMovementSpeed();
-                this.sendMovementSpeed(value ? movementSpeed * 1.3f : movementSpeed);
-            }
         }
     }
 
@@ -5385,7 +5354,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
         if (ev.isCancelled()) {
             return false;
         }
-        this.getSession().sendPacketImmediately(packet);
+        this.getSession().sendPacketImmediately(ev.getPacket());
         return true;
     }
 

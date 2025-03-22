@@ -118,7 +118,7 @@ public class Identifier {
         if (!Identifier.isNamespaceValid(namespace)) {
             throw new InvalidIdentifierException("Non [a-z0-9_.-] character in namespace of location: " + namespace + ":" + path);
         }
-        if (!Identifier.isPathValid(path)) {
+        if (!Identifier.isPathValid(path.toLowerCase())) {
             throw new InvalidIdentifierException("Non [a-z0-9/._-] character in path of location: " + namespace + ":" + path);
         }
     }
