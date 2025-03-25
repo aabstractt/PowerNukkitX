@@ -67,6 +67,8 @@ public class ItemBow extends ItemTool {
         if (offhandOptional.isEmpty() && inventoryOptional.isEmpty() && (player.isAdventure() || player.isSurvival())) {
             player.getOffhandInventory().sendContents(player);
             player.getInventory().sendContents(player);
+
+            System.out.println("No arrows found");
             return false;
         }
 
@@ -80,12 +82,17 @@ public class ItemBow extends ItemTool {
         Enchantment flameEnchant = this.getEnchantment(Enchantment.ID_BOW_FLAME);
         boolean flame = flameEnchant != null && flameEnchant.getLevel() > 0;
 
-        ItemArrow itemArrow = (ItemArrow) (offhandOptional.isPresent() ?  offhandOptional.get().getValue() : inventoryOptional.map(Map.Entry::getValue).orElse(null));
+        ItemArrow itemArrow;
+        if (player.isCreative()) {
+            itemArrow = new ItemArrow();
+        } else {
+            itemArrow = (ItemArrow) (offhandOptional.isPresent() ? offhandOptional.get().getValue() : inventoryOptional.map(Map.Entry::getValue).orElse(null));
+        }
 
-        if(itemArrow == null) {
-            if(player.isCreative()) {
-                itemArrow = new ItemArrow();
-            } else return false;
+        if (itemArrow == null) {
+            System.out.println("arrow not found");
+
+            return false;
         }
 
         CompoundTag nbt = new CompoundTag()
@@ -111,11 +118,8 @@ public class ItemBow extends ItemTool {
         ItemArrow copy = (ItemArrow) itemArrow.clone();
         copy.setCount(1);
         arrow.setItem(copy);
-        if (arrow == null) {
-            return false;
-        }
-        EntityShootBowEvent entityShootBowEvent = new EntityShootBowEvent(player, this, arrow, f);
 
+        EntityShootBowEvent entityShootBowEvent = new EntityShootBowEvent(player, this, arrow, f);
         if (f < 0.1 || ticksUsed < 3) {
             entityShootBowEvent.setCancelled();
         }
@@ -125,6 +129,8 @@ public class ItemBow extends ItemTool {
             entityShootBowEvent.getProjectile().kill();
             player.getInventory().sendContents(player);
             player.getOffhandInventory().sendContents(player);
+
+            System.out.println("Event cancelled");
         } else {
             entityShootBowEvent.getProjectile().setMotion(entityShootBowEvent.getProjectile().getMotion().multiply(entityShootBowEvent.getForce()));
             Enchantment infinityEnchant = this.getEnchantment(Enchantment.ID_BOW_INFINITY);

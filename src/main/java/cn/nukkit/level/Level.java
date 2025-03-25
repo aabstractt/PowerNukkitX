@@ -3522,7 +3522,7 @@ public class Level implements Metadatable {
                     pk.data = pair.left();
                     player.sendChunk(x, z, pk);
 
-                    player.refreshBlockEntity(chunk);
+                    //player.refreshBlockEntity(chunk);
                 }
 
                 this.chunkSendQueue.remove(index);

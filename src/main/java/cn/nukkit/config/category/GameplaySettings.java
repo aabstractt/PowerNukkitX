@@ -1,5 +1,6 @@
 package cn.nukkit.config.category;
 
+import cn.nukkit.config.ServerSettings;
 import eu.okaeri.configs.OkaeriConfig;
 import eu.okaeri.configs.annotation.Comment;
 import lombok.Data;
@@ -52,4 +53,10 @@ public class GameplaySettings extends OkaeriConfig {
     boolean allowClientPacks = true;
     @Comment("pnx.settings.gameplay.serverAuthoritativeMovement")
     String serverAuthoritativeMovement = "server-auth";
+    @Comment("nukkit.server.settings.gameplaysettings.splashPotion")
+    SplashPotionSettings splashPotion = new SplashPotionSettings();
+    @Comment("nukkit.server.settings.gameplaysettings.enderPearl")
+    EnderPearlSettings enderPearl = new EnderPearlSettings();
+    @Comment("nukkit.server.settings.gameplaysettings.snowBall")
+    SnowballSettings snowBall = new SnowballSettings();
 }
