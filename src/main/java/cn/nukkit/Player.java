@@ -21,7 +21,6 @@ import cn.nukkit.blockentity.BlockEntitySpawnable;
 import cn.nukkit.camera.data.CameraPreset;
 import cn.nukkit.command.CommandSender;
 import cn.nukkit.command.utils.RawText;
-import cn.nukkit.config.ServerPropertiesKeys;
 import cn.nukkit.dialog.window.FormWindowDialog;
 import cn.nukkit.entity.Attribute;
 import cn.nukkit.entity.Entity;
@@ -1279,7 +1278,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
         this.sendData(this.hasSpawned.values().toArray(Player.EMPTY_ARRAY), entityDataMap);
         this.spawnToAll();
         Arrays.stream(this.level.getEntities()).filter(entity -> entity.getViewers().containsKey(this.getLoaderId()) && entity instanceof EntityBoss).forEach(entity -> ((EntityBoss) entity).addBossbar(this));
-        this.refreshBlockEntity(this.chunk);
+        //this.refreshBlockEntity(this.chunk);
     }
 
     /**
@@ -2226,6 +2225,12 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
             }
         }
 
+        for(BlockEntity entity : this.level.getChunkBlockEntities(x, z).values()) {
+            if(entity instanceof BlockEntitySpawnable spawnable) {
+                spawnable.spawnTo(this);
+            }
+        }
+
         if (this.needDimensionChangeACK) {
             this.needDimensionChangeACK = false;
 
@@ -2325,7 +2330,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
     }
 
     public boolean awardAchievement(String achievementId) {
-        if (!Server.getInstance().getProperties().get(ServerPropertiesKeys.ACHIEVEMENTS, true)) {
+        if (!Server.getInstance().getSettings().gameplaySettings().achievements()) {
             return false;
         }
 
@@ -4321,7 +4326,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
 
         if (switchLevel) {
             refreshChunkRender();
-            refreshBlockEntity(this.chunk);
+            //refreshBlockEntity(this.chunk);
         }
         this.resetFallDistance();
         //DummyBossBar
