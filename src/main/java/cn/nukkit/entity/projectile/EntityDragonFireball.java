@@ -87,9 +87,9 @@ public class EntityDragonFireball extends EntityProjectile {
                                 .add(new DoubleTag(0))
                                 .add(new DoubleTag(0))
                         )
-                        .putInt("Duration", 2400)
-                        .putFloat("InitialRadius", 6)
-                        .putFloat("Radius", 6)
+                        .putInt("Duration", 40)
+                        .putFloat("InitialRadius", 3)
+                        .putFloat("Radius", 3)
                         .putFloat("RadiusChangeOnPickup", 0)
                         .putFloat("RadiusPerTick", 0)
         );

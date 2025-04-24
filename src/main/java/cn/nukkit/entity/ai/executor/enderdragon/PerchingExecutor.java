@@ -27,61 +27,65 @@ public class PerchingExecutor implements EntityControl, IBehaviorExecutor {
     public PerchingExecutor() {}
     @Override
     public boolean execute(EntityIntelligent entity) {
-        Vector3 target = new Vector3(0, entity.getLevel().getHighestBlockAt(0, 0) + 1, 0);
-        if(stayTick >= 0) {
-            stayTick++;
-        }
-        if(entity.distance(target) <= 1) {
-            if(stayTick == -1) stayTick=0;
-            if(stayTick == 25) {
-                entity.getViewers().values().stream().filter(player -> player.distance(new Vector3(0, 64, 0)) <= 20).findAny().ifPresent(player -> {
-                    removeRouteTarget(entity);
-                    setLookTarget(entity, player);
-                    Vector3 toPlayerVector = new Vector3(player.x - entity.x, player.y - entity.y, player.z - entity.z).normalize();
-                    Location location = entity.getLocation().add(toPlayerVector.multiply(10));
-                    location.y = location.level.getHighestBlockAt(location.toHorizontal()) + 1;
-                    EntityAreaEffectCloud areaEffectCloud = (EntityAreaEffectCloud) Entity.createEntity(Entity.AREA_EFFECT_CLOUD, location.getChunk(),
-                            new CompoundTag().putList("Pos", new ListTag<>()
-                                            .add(new DoubleTag(location.x))
-                                            .add(new DoubleTag(location.y))
-                                            .add(new DoubleTag(location.z))
-                                    )
-                                    .putList("Rotation", new ListTag<>()
-                                            .add(new FloatTag(0))
-                                            .add(new FloatTag(0))
-                                    )
-                                    .putList("Motion", new ListTag<>()
-                                            .add(new DoubleTag(0))
-                                            .add(new DoubleTag(0))
-                                            .add(new DoubleTag(0))
-                                    )
-                                    .putInt("Duration", 60)
-                                    .putFloat("InitialRadius", 6)
-                                    .putFloat("Radius", 6)
-                                    .putFloat("Height", 1)
-                                    .putFloat("RadiusChangeOnPickup", 0)
-                                    .putFloat("RadiusPerTick", 0)
-                    );
+        if (this.stayTick >= 0) this.stayTick++;
 
-                    List<Effect> effects = PotionType.get(PotionType.HARMING.id()).getEffects(false);
-                    for (Effect effect : effects) {
-                        if (effect != null && areaEffectCloud != null) {
-                            areaEffectCloud.cloudEffects.add(effect.setVisible(false).setAmbient(false));
+        Vector3 target = new Vector3(0, entity.getLevel().getHighestBlockAt(0, 0) + 1, 0);
+        if (entity.distance(target) <= 10) {
+            if (this.stayTick == -1) this.stayTick = 0;
+            if (this.stayTick == 25) {
+                entity.getViewers().values().stream()
+                        .filter(player -> player.distance(target) <= 10)
+                        .findAny()
+                        .ifPresent(player -> {
+                            removeRouteTarget(entity);
+                            setLookTarget(entity, player);
+                            Vector3 toPlayerVector = new Vector3(player.x - entity.x, player.y - entity.y, player.z - entity.z).normalize();
+                            Location location = entity.getLocation().add(toPlayerVector.multiply(10));
+                            location.y = location.level.getHighestBlockAt(location.toHorizontal()) + 1;
+                            EntityAreaEffectCloud areaEffectCloud = (EntityAreaEffectCloud) Entity.createEntity(Entity.AREA_EFFECT_CLOUD, location.getChunk(),
+                                    new CompoundTag().putList("Pos", new ListTag<>()
+                                                    .add(new DoubleTag(location.x))
+                                                    .add(new DoubleTag(location.y))
+                                                    .add(new DoubleTag(location.z))
+                                            )
+                                            .putList("Rotation", new ListTag<>()
+                                                    .add(new FloatTag(0))
+                                                    .add(new FloatTag(0))
+                                            )
+                                            .putList("Motion", new ListTag<>()
+                                                    .add(new DoubleTag(0))
+                                                    .add(new DoubleTag(0))
+                                                    .add(new DoubleTag(0))
+                                            )
+                                            .putInt("Duration", 20)
+                                            .putFloat("InitialRadius", 6)
+                                            .putFloat("Radius", 2)
+                                            .putFloat("Height", 1)
+                                            .putFloat("RadiusChangeOnPickup", 0)
+                                            .putFloat("RadiusPerTick", 0)
+                            );
+
+                            List<Effect> effects = PotionType.get(PotionType.HARMING.id()).getEffects(false);
+                            for (Effect effect : effects) {
+                                if (effect != null && areaEffectCloud != null) {
+                                    areaEffectCloud.cloudEffects.add(effect.setVisible(false).setAmbient(false));
+                                    areaEffectCloud.spawnToAll();
+                                }
+                            }
                             areaEffectCloud.spawnToAll();
-                        }
-                    }
-                    areaEffectCloud.spawnToAll();
-                });
+                        });
             }
         } else {
             setRouteTarget(entity, target);
             setLookTarget(entity, target);
         }
-        if(stayTick > 100) {
-            return false;
-        } else if(stayTick >= 0) {
+
+        if (this.stayTick > 100) return false;
+
+        if (this.stayTick >= 0) {
             entity.teleport(target);
         }
+
         return true;
     }
 

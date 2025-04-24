@@ -32,6 +32,7 @@ import cn.nukkit.entity.ai.route.posevaluator.IPosEvaluator;
 import cn.nukkit.entity.ai.sensor.NearestEntitySensor;
 import cn.nukkit.entity.ai.sensor.NearestPlayerSensor;
 import cn.nukkit.entity.item.EntityEnderCrystal;
+import cn.nukkit.event.entity.EntityDamageByEntityEvent;
 import cn.nukkit.event.entity.EntityDamageEvent;
 import cn.nukkit.item.Item;
 import cn.nukkit.lang.TranslationContainer;
@@ -60,6 +61,8 @@ import java.util.Set;
 
 public class EntityEnderDragon extends EntityBoss implements EntityFlyable {
 
+    private long lastAttackTime = 0L;
+
     @Override
     @NotNull public String getIdentifier() {
         return ENDER_DRAGON;
@@ -80,8 +83,7 @@ public class EntityEnderDragon extends EntityBoss implements EntityFlyable {
                         new Behavior(new PerchingExecutor(), entity -> getMemoryStorage().get(CoreMemoryTypes.FORCE_PERCHING), 5, 1),
                         new Behavior(new StrafeExecutor(), all(
                                 new MemoryCheckNotEmptyEvaluator(CoreMemoryTypes.NEAREST_PLAYER),
-                                new EntityCheckEvaluator(CoreMemoryTypes.NEAREST_PLAYER),
-                                new MemoryCheckNotEmptyEvaluator(CoreMemoryTypes.LAST_ENDER_CRYSTAL_DESTROY)
+                                new EntityCheckEvaluator(CoreMemoryTypes.NEAREST_PLAYER)
                         ), 4, 1),
                         new Behavior(new CircleMovementExecutor(CoreMemoryTypes.STAY_NEARBY, 1f, true, 82, 12, 5), all(
                                 new MemoryCheckNotEmptyEvaluator(CoreMemoryTypes.STAY_NEARBY),
@@ -131,11 +133,30 @@ public class EntityEnderDragon extends EntityBoss implements EntityFlyable {
                 return false;
             }
         }
+
+        if (source instanceof EntityDamageByEntityEvent) {
+            if (this.lastAttackTime == 0L) {
+                this.lastAttackTime = System.currentTimeMillis();
+            } else {
+                this.lastAttackTime += 250L;
+            }
+        }
+
         return super.attack(source);
+    }
+
+    public boolean canLookThem() {
+        return this.lastAttackTime > 0L && System.currentTimeMillis() - this.lastAttackTime <= 12000L;
     }
 
     @Override
     public boolean onUpdate(int currentTick) {
+        if (this.lastAttackTime != 0L) {
+            if (System.currentTimeMillis() - this.lastAttackTime >= 40000L) {
+                this.lastAttackTime = 0L;
+            }
+        }
+
         //Hack -> Ensures that Ender Dragon is always ticked.
         getLevel().getScheduler().scheduleTask(InternalPlugin.INSTANCE, this::scheduleUpdate);
         if(deathTicks != -1) {
@@ -214,18 +235,18 @@ public class EntityEnderDragon extends EntityBoss implements EntityFlyable {
 
     @Override
     public float getWidth() {
-        return 13;
+        return 18;
     }
 
     @Override
     public float getHeight() {
-        return 4;
+        return 5;
     }
 
     @Override
     public void initEntity() {
         this.diffHandDamage = new float[]{6f, 10f, 15f};
-        this.setMaxHealth(200);
+        this.setMaxHealth(500);
         super.initEntity();
         getMemoryStorage().put(CoreMemoryTypes.STAY_NEARBY, new Vector3(0, 84, 0));
         isActive = false;
@@ -263,6 +284,13 @@ public class EntityEnderDragon extends EntityBoss implements EntityFlyable {
         return isRevived() ? 500 : 12000;
     }
 
+    @Override
+    public boolean attackTarget(Entity entity) {
+        if (this.lastAttackTime == 0L) return false;
+
+        return System.currentTimeMillis() - this.lastAttackTime <= 40000L && super.attackTarget(entity);
+    }
+
     private class EnderDragonRouteFinder extends SimpleSpaceAStarRouteFinder {
 
         public EnderDragonRouteFinder(IPosEvaluator blockEvaluator, EntityIntelligent entity) {
@@ -288,11 +316,7 @@ public class EntityEnderDragon extends EntityBoss implements EntityFlyable {
 
     @Override
     public boolean move(double dx, double dy, double dz) {
-        boolean superRes = super.move(dx, dy, dz);
-        if(superRes) {
-            Arrays.stream(getLevel().getCollisionBlocks(getBoundingBox())).filter(block -> canBreakBlock(block)).forEach(block -> getLevel().breakBlock(block));
-        }
-        return superRes;
+        return super.move(dx, dy, dz);
     }
 
     public boolean isRevived() {

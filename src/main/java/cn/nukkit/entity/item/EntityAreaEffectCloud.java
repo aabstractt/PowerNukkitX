@@ -322,21 +322,18 @@ public class EntityAreaEffectCloud extends Entity {
 
     @Override
     public boolean onUpdate(int currentTick) {
-        if (this.closed) {
-            return false;
-        }
+        if (this.closed) return false;
 
         super.onUpdate(currentTick);
 
-        boolean sendRadius = age % 10 == 0;
+        boolean sendRadius = this.age % 10 == 0;
 
-        int age = this.age;
         float radius = getRadius();
         int waitTime = getWaitTime();
-        if (age < waitTime) {
+        if (this.age < waitTime) {
             radius = initialRadius;
-        } else if (age > waitTime + getDuration()) {
-            kill();
+        } else if (this.age > waitTime + getDuration()) {
+            this.close();
         } else {
             int tickDiff = age - lastAge;
             radius += getRadiusPerTick() * tickDiff;

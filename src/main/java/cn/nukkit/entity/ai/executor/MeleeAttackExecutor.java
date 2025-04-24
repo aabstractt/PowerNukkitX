@@ -97,22 +97,18 @@ public class MeleeAttackExecutor implements EntityControl, IBehaviorExecutor {
         Entity newTarget = entity.getBehaviorGroup().getMemoryStorage().get(memory);
 
         //first is null
-        if (this.target == null) {
-            this.target = newTarget;
-        }
-        if (this.lookTarget == null) {
-            this.lookTarget = target.getLocation();
-        }
+        if (this.target == null) this.target = newTarget;
+        if (this.lookTarget == null) this.lookTarget = target.getLocation();
 
         //some check
         if (!target.isAlive()) return false;
-        else if (entity.distanceSquared(target) > maxSenseRangeSquared) return false;
-        else if (target instanceof Player player) {
+        if (entity.distanceSquared(target) > maxSenseRangeSquared) return false;
+
+        if (target instanceof Player player) {
             if (player.isCreative() || player.isSpectator() || !player.isOnline() || !entity.level.getName().equals(player.level.getName())) {
                 return false;
             }
         }
-
 
         //update target and look target
         if (!this.target.getPosition().equals(newTarget.getPosition())) {
