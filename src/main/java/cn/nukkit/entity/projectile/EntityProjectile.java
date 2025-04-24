@@ -139,8 +139,6 @@ public abstract class EntityProjectile extends Entity {
         }
 
         this.initialPosition = this.getPosition();
-
-        System.out.println("Initial position: " + this.initialPosition);
     }
 
     @Override
@@ -246,10 +244,10 @@ public abstract class EntityProjectile extends Entity {
             this.motionY = 0;
             this.motionZ = 0;
 
-            System.out.println("DEBUG: Projectile collided with block");
+            /*System.out.println("DEBUG: Projectile collided with block");
             System.out.println("Initial position: " + this.initialPosition);
             System.out.println("Destination: " + destination);
-            System.out.println("Position: " + position);
+            System.out.println("Position: " + position);*/
 
             Vector3 finalDestination = this.getVector3();
             if (this.level.getBlock(position).isAir()) {

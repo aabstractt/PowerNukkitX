@@ -113,44 +113,6 @@ public class PlayerAuthInputProcessor extends DataPacketProcessor<PlayerAuthInpu
             PlayerJumpEvent playerJumpEvent = new PlayerJumpEvent(player);
             player.getServer().getPluginManager().callEvent(playerJumpEvent);
         }
-        if (pk.inputData.contains(AuthInputAction.START_SWIMMING)) {
-            var playerSwimmingEvent = new PlayerToggleSwimEvent(player, true);
-            player.getServer().getPluginManager().callEvent(playerSwimmingEvent);
-            if (playerSwimmingEvent.isCancelled()) {
-                player.sendData(player);
-            } else {
-                player.setSwimming(true);
-            }
-        }
-        if (pk.inputData.contains(AuthInputAction.STOP_SWIMMING)) {
-            var playerSwimmingEvent = new PlayerToggleSwimEvent(player, false);
-            player.getServer().getPluginManager().callEvent(playerSwimmingEvent);
-            if (playerSwimmingEvent.isCancelled()) {
-                player.sendData(player);
-            } else {
-                player.setSwimming(false);
-            }
-        }
-
-        if (pk.inputData.contains(AuthInputAction.START_CRAWLING)) {
-            var playerToggleCrawlEvent = new PlayerToggleCrawlEvent(player, true);
-            player.getServer().getPluginManager().callEvent(playerToggleCrawlEvent);
-            if (playerToggleCrawlEvent.isCancelled()) {
-                player.sendData(player);
-            } else {
-                player.setCrawling(true);
-            }
-        }
-        if (pk.inputData.contains(AuthInputAction.STOP_CRAWLING)) {
-            var playerToggleCrawlEvent = new PlayerToggleCrawlEvent(player, false);
-            player.getServer().getPluginManager().callEvent(playerToggleCrawlEvent);
-            if (playerToggleCrawlEvent.isCancelled()) {
-                player.sendData(player);
-            } else {
-                player.setCrawling(false);
-            }
-        }
-
         if (pk.inputData.contains(AuthInputAction.START_GLIDING)) {
             var playerToggleGlideEvent = new PlayerToggleGlideEvent(player, true);
             player.getServer().getPluginManager().callEvent(playerToggleGlideEvent);

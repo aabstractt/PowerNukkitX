@@ -178,34 +178,6 @@ public class PlayerActionProcessor extends DataPacketProcessor<PlayerActionPacke
                     player.setGliding(false);
                 }
             }
-            case PlayerActionPacket.ACTION_START_SWIMMING -> {
-                if (Server.getInstance().getServerAuthoritativeMovement() > 0) {
-                    return;
-                }
-
-                PlayerToggleSwimEvent ptse = new PlayerToggleSwimEvent(player, true);
-                player.getServer().getPluginManager().callEvent(ptse);
-
-                if (ptse.isCancelled()) {
-                    player.sendData(player);
-                } else {
-                    player.setSwimming(true);
-                }
-            }
-            case PlayerActionPacket.ACTION_STOP_SWIMMING -> {
-                if (Server.getInstance().getServerAuthoritativeMovement() > 0) {
-                    return;
-                }
-
-                var ev = new PlayerToggleSwimEvent(player, false);
-                player.getServer().getPluginManager().callEvent(ev);
-
-                if (ev.isCancelled()) {
-                    player.sendData(player);
-                } else {
-                    player.setSwimming(false);
-                }
-            }
             case PlayerActionPacket.ACTION_START_SPIN_ATTACK -> {
                 if (!Objects.equals(player.getInventory().getItemInHand().getId(), ItemID.TRIDENT)) {
                     player.sendPosition(player, player.yaw, player.pitch, MovePlayerPacket.MODE_RESET);

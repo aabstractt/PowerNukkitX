@@ -314,11 +314,9 @@ public class Server {
             it.withBindFile(config);
             it.withRemoveOrphans(true);
             it.saveDefaults();
-            it.load(true);
+            it.load(false);
         });
         this.settings.baseSettings().language(chooseLanguage);
-
-        while(updateConfiguration());
 
         this.computeThreadPool = new ForkJoinPool(Math.min(0x7fff, Runtime.getRuntime().availableProcessors()), new ComputeThreadPoolThreadFactory(), null, false);
 
@@ -713,8 +711,6 @@ public class Server {
                 player.close(player.getLeaveMessage(), getSettings().miscSettings().shutdownMessage());
             }
 
-            this.getSettings().save();
-
             log.debug("Disabling all plugins");
             this.pluginManager.disablePlugins();
 
@@ -863,6 +859,8 @@ public class Server {
                 } catch (Exception e) {
                     log.error(this.getLanguage().tr("nukkit.level.tickError",
                             level.getFolderPath(), Utils.getExceptionMessage(e)), e);
+
+                    e.printStackTrace(System.err);
                 }
             }
         }

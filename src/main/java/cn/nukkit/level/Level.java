@@ -10,6 +10,7 @@ import cn.nukkit.block.property.CommonBlockProperties;
 import cn.nukkit.blockentity.BlockEntity;
 import cn.nukkit.entity.Entity;
 import cn.nukkit.entity.EntityAsyncPrepare;
+import cn.nukkit.entity.EntityHuman;
 import cn.nukkit.entity.EntityID;
 import cn.nukkit.entity.EntityIntelligent;
 import cn.nukkit.entity.item.EntityAreaEffectCloud;
@@ -1056,6 +1057,7 @@ public class Level implements Metadatable {
                     }
                 }
             }
+
             if (!this.updateEntities.isEmpty()) {
                 CompletableFuture.runAsync(() -> updateEntities.keySet()
                         .longParallelStream().forEach(id -> {
@@ -1064,18 +1066,19 @@ public class Level implements Metadatable {
                                 entityAsyncPrepare.asyncPrepare(getTick());
                             }
                         }), Server.getInstance().getComputeThreadPool()).join();
+
                 for (long id : this.updateEntities.keySetLong()) {
                     Entity entity = this.updateEntities.get(id);
-                    if (entity instanceof EntityIntelligent intelligent) {
-                        if (intelligent.getBehaviorGroup() == null) {
-                            this.updateEntities.remove(id);
-                            continue;
-                        }
+                    if (entity instanceof EntityIntelligent intelligent && intelligent.getBehaviorGroup() == null) {
+                        this.updateEntities.remove(id);
+                        continue;
                     }
+
                     if (entity == null) {
                         this.updateEntities.remove(id);
                         continue;
                     }
+
                     if (entity.closed || !entity.onUpdate(currentTick)) {
                         this.updateEntities.remove(id);
                     }
@@ -1144,9 +1147,7 @@ public class Level implements Metadatable {
                 gameRules.refresh();
             }
         } catch (Exception e) {
-            log.error(getServer().getLanguage().tr("nukkit.level.tickError",
-                    this.getFolderPath(), Utils.getExceptionMessage(e)), e);
-            e.printStackTrace();
+            e.printStackTrace(System.err);
         } finally {
             getPlayers().values().forEach(Player::checkNetwork);
             releaseTickCachedBlocks();
@@ -3522,7 +3523,7 @@ public class Level implements Metadatable {
                     pk.data = pair.left();
                     player.sendChunk(x, z, pk);
 
-                    //player.refreshBlockEntity(chunk);
+                    player.refreshBlockEntity(chunk);
                 }
 
                 this.chunkSendQueue.remove(index);

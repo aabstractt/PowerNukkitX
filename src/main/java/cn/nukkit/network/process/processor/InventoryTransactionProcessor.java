@@ -43,6 +43,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 @Slf4j
 public class InventoryTransactionProcessor extends DataPacketProcessor<InventoryTransactionPacket> {
@@ -357,22 +358,30 @@ public class InventoryTransactionProcessor extends DataPacketProcessor<Inventory
             }
             case InventoryTransactionPacket.USE_ITEM_ACTION_CLICK_AIR -> {
                 Item item;
-                Item useItemDataItem = useItemData.itemInHand;
-                Item serverItemInHand = player.getInventory().getItemInHand();
-
                 Vector3 directionVector = player.getDirectionVector();
-                // Removes Damage Tag that the client adds, but we do not store.
-                if(useItemDataItem.hasCompoundTag() && (!serverItemInHand.hasCompoundTag() || !serverItemInHand.getNamedTag().containsInt("Damage"))) {
-                    if(useItemDataItem.getNamedTag().containsInt("Damage")) {
-                        useItemDataItem.getNamedTag().remove("Damage");
-                    }
-                }
+                // Remove damage tag from server item
+                Item serverItemInHand = player.getInventory().getItemInHand().clone();
+                Optional.ofNullable(serverItemInHand.getNamedTag())
+                        .ifPresent(namedTag -> namedTag.remove("Damage"));
+
+                //// Remove damage tag from client item
+                Item useItemDataItem = useItemData.itemInHand;
+                Optional.ofNullable(useItemDataItem.getNamedTag())
+                        .ifPresent(namedTag -> namedTag.remove("Damage"));
+
                 ////
                 if (player.isCreative()) {
                     item = serverItemInHand;
                 } else if (!serverItemInHand.equals(useItemDataItem)) {
                     player.getServer().getLogger().warning("Item received did not match item in hand.");
                     player.getInventory().sendHeldItem(player);
+
+                    System.out.println("Item in hand: " + serverItemInHand);
+                    System.out.println("Item received: " + useItemDataItem);
+                    System.out.println("Player Slot: " + useItemData.hotbarSlot);
+                    System.out.println("Server Slot: " + player.getInventory().getHeldItemIndex());
+                    System.out.println("Player: " + player.getName());
+
                     return;
                 } else {
                     item = serverItemInHand;

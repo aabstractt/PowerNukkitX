@@ -8,7 +8,7 @@ import cn.nukkit.item.ItemBlock;
 import cn.nukkit.level.Sound;
 import cn.nukkit.math.BlockFace;
 import cn.nukkit.math.Vector3;
-import cn.nukkit.network.protocol.LevelSoundEventPacketV1;
+import cn.nukkit.network.protocol.LevelSoundEventPacket;
 import cn.nukkit.utils.Faceable;
 import org.jetbrains.annotations.NotNull;
 
@@ -121,7 +121,7 @@ public class BlockEndPortalFrame extends BlockTransparent implements Faceable {
                     }
                 }
 
-                this.getLevel().addLevelSoundEvent(this, LevelSoundEventPacketV1.SOUND_BLOCK_END_PORTAL_SPAWN);
+                this.getLevel().addLevelSoundEvent(this, LevelSoundEventPacket.SOUND_BLOCK_END_PORTAL_SPAWN);
 
                 return true;
             }

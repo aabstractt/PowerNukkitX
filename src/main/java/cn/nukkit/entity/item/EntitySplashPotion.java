@@ -2,6 +2,7 @@ package cn.nukkit.entity.item;
 
 import cn.nukkit.Server;
 import cn.nukkit.config.ServerSettings;
+import cn.nukkit.config.category.SplashPotionSettings;
 import cn.nukkit.entity.Entity;
 import cn.nukkit.entity.effect.Effect;
 import cn.nukkit.entity.effect.PotionType;
@@ -125,7 +126,7 @@ public class EntitySplashPotion extends EntityProjectile {
         this.getLevel().addParticle(particle);
         this.getLevel().addSound(this, Sound.RANDOM_GLASS);
 
-        ServerSettings.SplashPotionSettings splashPotionSettings = Server.getInstance().getSettings().gameplaySettings().splashPotion();
+        SplashPotionSettings splashPotionSettings = Server.getInstance().getSettings().gameplaySettings().splashPotion();
 
         //Entity[] entities = this.getLevel().getNearbyEntities(this.getBoundingBox().grow(4.125, 2.125, 4.125));
         Entity[] entities = this.getLevel().getNearbyEntities(this.getBoundingBox().grow(

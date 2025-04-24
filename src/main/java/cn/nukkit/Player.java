@@ -1278,7 +1278,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
         this.sendData(this.hasSpawned.values().toArray(Player.EMPTY_ARRAY), entityDataMap);
         this.spawnToAll();
         Arrays.stream(this.level.getEntities()).filter(entity -> entity.getViewers().containsKey(this.getLoaderId()) && entity instanceof EntityBoss).forEach(entity -> ((EntityBoss) entity).addBossbar(this));
-        //this.refreshBlockEntity(this.chunk);
+        this.refreshBlockEntity(this.chunk);
     }
 
     /**
@@ -1404,12 +1404,10 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
             }
         }
 
-        if (this.chunk == null) {
-            return;
-        }
+        if (this.chunk == null) return;
 
         this.chunk.addEntity(this);
-        //this.refreshBlockEntity(false);
+        //this.refreshBlockEntity(this.chunk);
     }
 
     protected void sendPlayStatus(int status) {
@@ -2225,11 +2223,17 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
             }
         }
 
-        for(BlockEntity entity : this.level.getChunkBlockEntities(x, z).values()) {
-            if(entity instanceof BlockEntitySpawnable spawnable) {
-                spawnable.spawnTo(this);
-            }
-        }
+        /*List<BlockEntity> blockEntities = new ArrayList<>(this.level.getChunkBlockEntities(x, z).values());
+        this.server.getScheduler().scheduleDelayedTask(
+                () -> {
+                    for (BlockEntity entity : blockEntities) {
+                        if (entity instanceof BlockEntitySpawnable spawnable) {
+                            spawnable.spawnTo(this);
+                        }
+                    }
+                },
+                10
+        );*/
 
         if (this.needDimensionChangeACK) {
             this.needDimensionChangeACK = false;
@@ -4326,7 +4330,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
 
         if (switchLevel) {
             refreshChunkRender();
-            //refreshBlockEntity(this.chunk);
+            this.refreshBlockEntity(this.chunk);
         }
         this.resetFallDistance();
         //DummyBossBar
@@ -5213,9 +5217,13 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
      * @param click clicked or forced
      */
     public void stopFishing(boolean click) {
-        if (this.fishing != null && click) {
-            fishing.reelLine();
-        } else if (this.fishing != null) {
+        if (this.fishing == null) return;
+
+        this.server.getPluginManager().callEvent(new PlayerStopFishingEvent(this, this.fishing));
+
+        if (click) {
+            this.fishing.reelLine();
+        } else {
             this.fishing.close();
         }
 

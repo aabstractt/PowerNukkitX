@@ -395,8 +395,6 @@ public abstract class Entity extends Location implements Metadatable, EntityID, 
             return getSwimmingHeight();
         } else if(isSneaking()) {
             return getSneakingHeight();
-        } else if (isCrawling()) {
-            return getCrawlingHeight();
         } else {
             return getHeight();
         }

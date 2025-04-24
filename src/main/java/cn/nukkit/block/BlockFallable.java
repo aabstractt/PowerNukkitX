@@ -39,11 +39,14 @@ public abstract class BlockFallable extends BlockSolid {
     public void drop(CompoundTag customNbt) {
         this.level.setBlock(this, Block.get(Block.AIR), true, true);
         EntityFallingBlock fall = createFallingEntity(customNbt);
+        if (fall == null) return;
 
         fall.spawnToAll();
     }
 
     protected EntityFallingBlock createFallingEntity(CompoundTag customNbt) {
+        if (this.getId().equals(BlockID.GRAVEL)) return null;
+
         CompoundTag nbt = new CompoundTag()
                 .putList("Pos", new ListTag<DoubleTag>()
                         .add(new DoubleTag(this.x + 0.5))

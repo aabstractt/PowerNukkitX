@@ -5,9 +5,11 @@ import cn.nukkit.Server;
 import cn.nukkit.command.exceptions.SelectorSyntaxException;
 import cn.nukkit.command.selector.EntitySelectorAPI;
 import cn.nukkit.entity.Entity;
+import cn.nukkit.entity.EntityHuman;
 import com.google.common.collect.Lists;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 解析为{@code List<Entity>}值
@@ -29,13 +31,14 @@ public class EntitiesNode extends TargetNode<Entity> {
                 error(exception.getMessage());
                 return;
             }
-            this.value = entities;
+            this.value = entities.stream()
+                    .filter(entity -> !(entity instanceof EntityHuman))
+                    .collect(Collectors.toList());
         } else {
             entities = Lists.newArrayList();
             Player player = Server.getInstance().getPlayer(arg);
-            if (player != null) {
-                entities.add(player);
-            }
+            if (player != null) entities.add(player);
+            
             this.value = entities;
         }
     }

@@ -230,7 +230,7 @@ public class BlockEntityHopper extends BlockEntitySpawnable implements BlockEnti
         Level level = this.getLocation().getLevel();
         if (level == null) return false;
 
-        Block blockSide = this.getSide(BlockFace.UP).getTickCachedLevelBlock();
+        Block blockSide = this.getSide(BlockFace.UP).getLevelBlock();
         BlockEntity blockEntity = level.getBlockEntity(temporalVector.setComponentsAdding(this, BlockFace.UP));
 
         if (this.getLocation().getLevel() == null) return false;
