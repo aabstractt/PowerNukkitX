@@ -358,14 +358,14 @@ public class InventoryTransactionProcessor extends DataPacketProcessor<Inventory
             }
             case InventoryTransactionPacket.USE_ITEM_ACTION_CLICK_AIR -> {
                 Item item;
+                Item useItemDataItem = useItemData.itemInHand;
+                Item serverItemInHand = player.getInventory().getUnclonedItemInHand();
                 Vector3 directionVector = player.getDirectionVector();
-                // Remove damage tag from server item
-                Item serverItemInHand = player.getInventory().getItemInHand().clone();
+
                 Optional.ofNullable(serverItemInHand.getNamedTag())
                         .ifPresent(namedTag -> namedTag.remove("Damage"));
 
                 //// Remove damage tag from client item
-                Item useItemDataItem = useItemData.itemInHand;
                 Optional.ofNullable(useItemDataItem.getNamedTag())
                         .ifPresent(namedTag -> namedTag.remove("Damage"));
 
@@ -387,10 +387,7 @@ public class InventoryTransactionProcessor extends DataPacketProcessor<Inventory
                     item = serverItemInHand;
                 }
 
-                lastHotbarSlot = useItemData.hotbarSlot;
-                lastHotbarTime = System.currentTimeMillis();
-
-                PlayerInteractEvent interactEvent = new PlayerInteractEvent(player, item, directionVector, face, PlayerInteractEvent.Action.RIGHT_CLICK_AIR);
+                PlayerInteractEvent interactEvent = new PlayerInteractEvent(player, item.clone(), directionVector, face, PlayerInteractEvent.Action.RIGHT_CLICK_AIR);
                 player.getServer().getPluginManager().callEvent(interactEvent);
                 playerHandle.setInteract();
                 if (interactEvent.isCancelled()) {

@@ -165,23 +165,25 @@ public class FakeInventory extends BaseInventory implements InputInventory {
         } else if(action instanceof DropAction dropAction) {
             source = dropAction.getSource();
         }
-        if (source == null) return;
-
-        ContainerSlotType sourceSlotType = source.getContainerName().getContainer();
-        Inventory sourceI = NetworkMapping.getInventory(event.getPlayer(), sourceSlotType);
-        int sourceSlot = sourceI.fromNetworkSlot(source.getSlot());
-        Item sourItem = sourceI.getItem(sourceSlot);
-        if (sourceI.equals(this)) {
-            ItemHandler handler = this.handlers.getOrDefault(sourceSlot, this.defaultItemHandler);
-            handler.handle(this, sourceSlot, sourItem, Item.AIR, event);
-        } else if(destination != null) {
-            ContainerSlotType destinationSlotType = destination.getContainerName().getContainer();
-            Inventory destinationI = NetworkMapping.getInventory(event.getPlayer(), destinationSlotType);
-            int destinationSlot = destinationI.fromNetworkSlot(destination.getSlot());
-            Item destItem = destinationI.getItem(destinationSlot);
-            if (destinationI.equals(this)) {
-                ItemHandler handler = this.handlers.getOrDefault(destinationSlot, this.defaultItemHandler);
-                handler.handle(this, destinationSlot, destItem, sourItem, event);
+        if (source != null) {
+            ContainerSlotType sourceSlotType = source.getContainerName().getContainer();
+            Integer dynamicSrc = source.getContainerName().getDynamicId();
+            Inventory sourceI = NetworkMapping.getInventory(event.getPlayer(), sourceSlotType, dynamicSrc);
+            int sourceSlot = sourceI.fromNetworkSlot(source.getSlot());
+            Item sourItem = sourceI.getItem(sourceSlot);
+            if (sourceI.equals(this)) {
+                ItemHandler handler = this.handlers.getOrDefault(sourceSlot, this.defaultItemHandler);
+                handler.handle(this, sourceSlot, sourItem, Item.AIR, event);
+            } else if(destination != null) {
+                ContainerSlotType destinationSlotType = destination.getContainerName().getContainer();
+                Integer dynamicDst = source.getContainerName().getDynamicId();
+                Inventory destinationI = NetworkMapping.getInventory(event.getPlayer(), destinationSlotType, dynamicDst);
+                int destinationSlot = destinationI.fromNetworkSlot(destination.getSlot());
+                Item destItem = destinationI.getItem(destinationSlot);
+                if (destinationI.equals(this)) {
+                    ItemHandler handler = this.handlers.getOrDefault(destinationSlot, this.defaultItemHandler);
+                    handler.handle(this, destinationSlot, destItem, sourItem, event);
+                }
             }
         }
     }

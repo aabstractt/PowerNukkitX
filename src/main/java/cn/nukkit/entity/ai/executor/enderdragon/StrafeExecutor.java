@@ -7,7 +7,6 @@ import cn.nukkit.entity.EntityIntelligent;
 import cn.nukkit.entity.ai.executor.EntityControl;
 import cn.nukkit.entity.ai.executor.IBehaviorExecutor;
 import cn.nukkit.entity.ai.memory.CoreMemoryTypes;
-import cn.nukkit.entity.mob.EntityEnderDragon;
 import cn.nukkit.level.Location;
 import cn.nukkit.math.BVector3;
 import cn.nukkit.math.Vector3;
