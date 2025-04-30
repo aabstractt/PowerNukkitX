@@ -93,21 +93,19 @@ public class HumanInventory extends BaseInventory {
         }
 
         if (this.getHolder() instanceof Player player) {
-            PlayerItemHeldEvent ev = new PlayerItemHeldEvent(player, this.getItem(slot), slot);
+            Item destinationItem = this.getItem(slot);
+            PlayerItemHeldEvent ev = new PlayerItemHeldEvent(player, destinationItem, slot);
             this.getHolder().getLevel().getServer().getPluginManager().callEvent(ev);
 
             if (ev.isCancelled()) {
                 this.sendContents(this.getViewers());
                 return false;
             }
-            if(this.getItem(slot) instanceof ItemFilledMap map) {
-                map.sendImage(player, 1);
-            }
 
-            if (player.fishing != null) {
-                if (!(this.getItem(slot).equals(player.fishing.rod))) {
-                    player.stopFishing(false);
-                }
+            if (destinationItem instanceof ItemFilledMap map) {
+                map.sendImage(player, 1);
+            } else if (player.fishing != null && !destinationItem.getId().equals(Item.FISHING_ROD)) {
+                player.stopFishing(false);
             }
         }
 

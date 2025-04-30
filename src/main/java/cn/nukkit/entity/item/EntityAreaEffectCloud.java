@@ -348,7 +348,7 @@ public class EntityAreaEffectCloud extends Entity {
                     setDuration(getDuration() + durationOnUse);
 
                     for (Entity collidingEntity : collidingEntities) {
-                        if (collidingEntity == this || !(collidingEntity instanceof EntityLiving)) continue;
+                        if (!(collidingEntity instanceof EntityLiving)) continue;
 
                         for (Effect effect : cloudEffects) {
                             collidingEntity.addEffect(effect);

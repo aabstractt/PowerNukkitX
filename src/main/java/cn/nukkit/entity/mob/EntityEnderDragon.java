@@ -53,6 +53,7 @@ import cn.nukkit.network.protocol.LevelSoundEventPacket;
 import cn.nukkit.plugin.InternalPlugin;
 import cn.nukkit.utils.Utils;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -62,6 +63,14 @@ import java.util.Set;
 public class EntityEnderDragon extends EntityBoss implements EntityFlyable {
 
     private long lastAttackTime = 0L;
+    /**
+     * * The last player that attacked the dragon.
+     */
+    private @Nullable Player lastAttacker = null;
+    /**
+     * * The last time the dragon was attacked.
+     */
+    private long attackerTimer = 0L;
 
     @Override
     @NotNull public String getIdentifier() {
@@ -134,19 +143,21 @@ public class EntityEnderDragon extends EntityBoss implements EntityFlyable {
             }
         }
 
-        if (source instanceof EntityDamageByEntityEvent) {
+        Entity attacker = source instanceof EntityDamageByEntityEvent ? ((EntityDamageByEntityEvent) source).getDamager() : null;
+        if (attacker != null) {
             if (this.lastAttackTime == 0L) {
                 this.lastAttackTime = System.currentTimeMillis();
             } else {
                 this.lastAttackTime += 250L;
             }
+
+            if (attacker instanceof Player && (this.attackerTimer == 0L || System.currentTimeMillis() - this.attackerTimer > 2000L)) {
+                this.attackerTimer = System.currentTimeMillis();
+                this.lastAttacker = (Player) attacker;
+            }
         }
 
         return super.attack(source);
-    }
-
-    public boolean canLookThem() {
-        return this.lastAttackTime > 0L && System.currentTimeMillis() - this.lastAttackTime <= 12000L;
     }
 
     @Override
@@ -198,38 +209,6 @@ public class EntityEnderDragon extends EntityBoss implements EntityFlyable {
         } else {
             super.kill();
             close();
-            if(!isRevived()) {
-                getLevel().setBlock(new Vector3(0, getLevel().getHighestBlockAt(Vector2.ZERO)+1, 0), Block.get(Block.DRAGON_EGG));
-            }
-
-            for(int y = getLevel().getMinHeight(); y < getLevel().getHighestBlockAt(0, 0); y++) {
-                if(getLevel().getBlock(0, y, 0) instanceof BlockBedrock) {
-                    for(int i = -2; i <= 2; i++) {
-                        for(int j = -1; j <= 1; j++) {
-                            if(!(i == 0 && j == 0)) {
-                                getLevel().setBlock(new Vector3(i, y+1, j), Block.get(Block.END_PORTAL));
-                                getLevel().setBlock(new Vector3(j, y+1, i), Block.get(Block.END_PORTAL));
-                            }
-                        }
-                    }
-                    break;
-                }
-            }
-
-            for(int i = 0; i < 20; i++) {
-                Vector3 origin = Vector3.ZERO;
-                double angleIncrement = 360.0 / 20;
-                double angle = Math.toRadians(i * angleIncrement);
-                double particleX = origin.getX() + Math.cos(angle) * 96;
-                double particleZ = origin.getZ() + Math.sin(angle) * 96;
-                Block dest = getLevel().getBlock(new Vector3(particleX, 75, particleZ));
-                if(!(dest instanceof BlockEndGateway)) {
-                    Arrays.stream(BlockFace.values()).forEach(face -> getLevel().setBlock(dest.up().getSide(face), Block.get(Block.BEDROCK)));
-                    Arrays.stream(BlockFace.values()).forEach(face -> getLevel().setBlock(dest.down().getSide(face), Block.get(Block.BEDROCK)));
-                    getLevel().setBlock(dest, Block.get(Block.END_GATEWAY));
-                    break;
-                } else continue;
-            }
         }
     }
 
@@ -287,8 +266,11 @@ public class EntityEnderDragon extends EntityBoss implements EntityFlyable {
     @Override
     public boolean attackTarget(Entity entity) {
         if (this.lastAttackTime == 0L) return false;
+        if (System.currentTimeMillis() - this.lastAttackTime > 40000L) return false;
 
-        return System.currentTimeMillis() - this.lastAttackTime <= 40000L && super.attackTarget(entity);
+        if (this.lastAttacker != null && System.currentTimeMillis() - this.attackerTimer <= 5000L) return this.lastAttacker == entity;
+
+        return super.attackTarget(entity);
     }
 
     private class EnderDragonRouteFinder extends SimpleSpaceAStarRouteFinder {

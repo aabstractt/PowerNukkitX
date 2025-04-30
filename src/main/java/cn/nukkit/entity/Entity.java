@@ -796,13 +796,10 @@ public abstract class Entity extends Location implements Metadatable, EntityID, 
             return;
         }
 
-        if (oldEffect != null && (
-                Math.abs(effect.getAmplifier()) < Math.abs(oldEffect.getAmplifier()) ||
-                        (Math.abs(effect.getAmplifier()) == Math.abs(oldEffect.getAmplifier()) &&
-                                effect.getDuration() < oldEffect.getDuration())
-        )) {
-            return;
-        }
+        int oldAmplifier = oldEffect != null ? oldEffect.getAmplifier() : -1;
+        int oldDuration = oldEffect != null ? oldEffect.getDuration() : -1;
+        if (oldAmplifier > effect.getAmplifier() && oldDuration > effect.getDuration()) return;
+        if (oldAmplifier == effect.getAmplifier()) return;
 
         if (this instanceof Player player && effect.getId() != null) {
             MobEffectPacket packet = new MobEffectPacket();

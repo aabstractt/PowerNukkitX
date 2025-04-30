@@ -29,7 +29,12 @@ public class PerchingExecutor implements EntityControl, IBehaviorExecutor {
     public boolean execute(EntityIntelligent entity) {
         if (this.stayTick >= 0) this.stayTick++;
 
-        Vector3 target = new Vector3(0, entity.getLevel().getHighestBlockAt(0, 0) + 1, 0);
+        Vector3 nearby = entity.getMemoryStorage().get(CoreMemoryTypes.STAY_NEARBY);
+        if (nearby == null) {
+            throw new NullPointerException("stayNearby is null");
+        }
+
+        Vector3 target = new Vector3(0, entity.getLevel().getHighestBlockAt(nearby.getFloorX(), nearby.getFloorZ()) + 1, 0);
         if (entity.distance(target) <= 10) {
             if (this.stayTick == -1) this.stayTick = 0;
             if (this.stayTick == 25) {
