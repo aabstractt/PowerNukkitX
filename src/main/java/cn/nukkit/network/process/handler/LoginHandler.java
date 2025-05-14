@@ -13,6 +13,7 @@ import cn.nukkit.network.protocol.types.PlayerInfo;
 import cn.nukkit.network.protocol.types.XboxLivePlayerInfo;
 import cn.nukkit.utils.ClientChainData;
 import cn.nukkit.network.protocol.types.Platform;
+import cn.nukkit.utils.TextFormat;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
@@ -79,20 +80,21 @@ public class LoginHandler extends BedrockSessionPacketHandler {
             //Verify if the titleId match with DeviceOs
             int predictedDeviceOS = getPredictedDeviceOS(chainData);
             if(predictedDeviceOS != chainData.getDeviceOS()) {
-                session.close("§cPacket handling error");
+                session.close(TextFormat.RED + "Unexpected DeviceOS");
+                log.error("Player {} tried to connect with a different DeviceOS... [Expected {}, got {}]", chainData.getUsername(), predictedDeviceOS, chainData.getDeviceOS());
                 return;
             }
         }
 
         //Verify if the language is valid
         if(!isValidLanguage(chainData.getLanguageCode())) {
-            session.close("§cPacket handling error");
+            session.close(TextFormat.RED + "Unexpected Language");
             return;
         }
 
         //Verify if the GameVersion has valid format
         if(chainData.getGameVersion().split("\\.").length != 3 && !Server.getInstance().getSettings().gameplaySettings().allowBeta()) {
-            session.close("§cPacket handling error");
+            session.close(TextFormat.RED + "Unexpected GameVersion");
             return;
         }
 
@@ -103,7 +105,7 @@ public class LoginHandler extends BedrockSessionPacketHandler {
                 CurrentInputMode >= InputMode.COUNT.getOrdinal()
         ) {
             log.debug("disconnection due to invalid input mode");
-            session.close("§cPacket handling error");
+            session.close(TextFormat.RED + "Unexpected InputMode");
             return;
         }
 
@@ -114,7 +116,7 @@ public class LoginHandler extends BedrockSessionPacketHandler {
                 DefaultInputMode >= InputMode.COUNT.getOrdinal()
         ) {
             log.debug("disconnection due to invalid input mode");
-            session.close("§cPacket handling error");
+            session.close(TextFormat.RED + "Unexpected DefaultInputMode");
             return;
         }
 
@@ -185,8 +187,12 @@ public class LoginHandler extends BedrockSessionPacketHandler {
     }
 
     private int getPredictedDeviceOS(ClientChainData chainData) {
+        int playStationPlatform = Platform.PLAYSTATION.getId();
+        if (chainData.getDeviceOS() == playStationPlatform) return playStationPlatform;
+
         String titleId = chainData.getTitleId();
-        if(titleId == null) return Platform.UNKNOWN.getId();
+
+        if (titleId == null) return Platform.UNKNOWN.getId();
         return switch (titleId) {
             case "896928775":
                 yield Platform.WINDOWS_10.getId();
@@ -195,7 +201,7 @@ public class LoginHandler extends BedrockSessionPacketHandler {
             case "1739947436":
                 yield Platform.ANDROID.getId();
             case "2044456598":
-                yield Platform.PLAYSTATION.getId();
+                yield playStationPlatform;
             case "1828326430":
                 yield Platform.XBOX_ONE.getId();
             case "1810924247":

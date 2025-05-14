@@ -3,6 +3,7 @@ package cn.nukkit.utils;
 import cn.nukkit.Server;
 import cn.nukkit.network.connection.util.EncryptionUtils;
 import cn.nukkit.network.protocol.LoginPacket;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 import org.jose4j.jws.JsonWebSignature;
@@ -292,7 +293,9 @@ public final class ClientChainData implements LoginChainData {
                 if (extra.has("displayName")) this.username = extra.get("displayName").getAsString();
                 if (extra.has("identity")) this.clientUUID = UUID.fromString(extra.get("identity").getAsString());
                 if (extra.has("XUID")) this.xuid = extra.get("XUID").getAsString();
-                if (extra.has("titleId")) this.titleId = extra.get("titleId").getAsString();
+
+                JsonElement titleIdElement = extra.get("titleId");
+                if (titleIdElement != null && titleIdElement.isJsonPrimitive()) this.titleId = titleIdElement.getAsString();
             }
             if (chainMap.has("identityPublicKey"))
                 this.identityPublicKey = chainMap.get("identityPublicKey").getAsString();
