@@ -1,5 +1,6 @@
 package cn.nukkit.utils;
 
+import cn.nukkit.Server;
 import cn.nukkit.block.Block;
 import cn.nukkit.block.BlockID;
 import cn.nukkit.block.BlockPortal;
@@ -102,18 +103,18 @@ public final class PortalHelper implements BlockID {
     public static Position convertPosBetweenNetherAndOverworld(Position current) {
         DimensionData dimensionData;
         if (current.level.getDimension() == DIMENSION_OVERWORLD) {
-            Level netherLevel = current.getLevel().getDimensionDestinationLevel(DIMENSION_NETHER);
+            Level netherLevel = Server.getInstance().getLevelByName("nether");
             if(netherLevel == null) return null;
 
             dimensionData = DimensionEnum.NETHER.getDimensionData();
             return new Position(current.getFloorX() >> 3, NukkitMath.clamp(current.getFloorY(), dimensionData.getMinHeight(), dimensionData.getMaxHeight()) + 1, current.getFloorZ() >> 3, netherLevel);
         } else if (current.level.getDimension() == Level.DIMENSION_NETHER) {
-            dimensionData = DimensionEnum.OVERWORLD.getDimensionData();
-            Level overworldLevel = current.getLevel().getDimensionDestinationLevel(DIMENSION_OVERWORLD);
+            Level overworldLevel = Server.getInstance().getDefaultLevel();
             if(overworldLevel == null) return null;
             int x = current.getFloorX() << 3;
             int z = current.getFloorZ() << 3;
             int y = overworldLevel.getHighestBlockAt(x, z);
+
             for(int i = overworldLevel.getMinHeight(); i < y; i++) {
                 if (!(overworldLevel.getBlock(x, i, z) instanceof BlockPortal)) continue;
 
@@ -122,6 +123,7 @@ public final class PortalHelper implements BlockID {
                 break;
             }
 
+            dimensionData = DimensionEnum.OVERWORLD.getDimensionData();
             return new Position(x, NukkitMath.clamp(y, dimensionData.getMinHeight(), dimensionData.getMaxHeight()) + 1, z, overworldLevel);
         } else {
             throw new IllegalArgumentException("Neither overworld nor nether given!");
@@ -130,12 +132,14 @@ public final class PortalHelper implements BlockID {
 
     public static Position convertPosBetweenEndAndOverworld(Position current) {
         if (current.level.getDimension() == DIMENSION_OVERWORLD) {
-            Level endLevel = current.getLevel().getDimensionDestinationLevel(DIMENSION_THE_END);
+            Level endLevel = Server.getInstance().getLevelByName("end");
             if(endLevel == null) return null;
-            return new Location(100, 50, 0, endLevel);
+
+            return endLevel.getSafeSpawn();
         } else if (current.level.getDimension() == DIMENSION_THE_END) {
-            Level overworldLevel = current.getLevel().getDimensionDestinationLevel(DIMENSION_OVERWORLD);
+            Level overworldLevel = Server.getInstance().getDefaultLevel();
             if(overworldLevel == null) return null;
+
             return overworldLevel.getSafeSpawn();
         } else {
             throw new IllegalArgumentException("Neither overworld nor end given!");

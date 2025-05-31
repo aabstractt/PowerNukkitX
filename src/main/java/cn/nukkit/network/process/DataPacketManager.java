@@ -83,7 +83,6 @@ public final class DataPacketManager {
                 new SetDifficultyProcessor(),
                 new SettingsCommandProcessor(),
                 new PositionTrackingDBClientRequestProcessor(),
-                new ShowCreditsProcessor(),
                 new TickSyncProcessor(),
                 new RequestPermissionsProcessor(),
                 new RiderJumpProcessor(),

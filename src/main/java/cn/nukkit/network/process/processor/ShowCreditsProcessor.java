@@ -14,15 +14,12 @@ public class ShowCreditsProcessor extends DataPacketProcessor<ShowCreditsPacket>
     @Override
     public void handle(@NotNull PlayerHandle playerHandle, @NotNull ShowCreditsPacket pk) {
         if (pk.status == ShowCreditsPacket.STATUS_END_CREDITS) {
-            if (playerHandle.getShowingCredits()) {
-                playerHandle.player.setShowingCredits(false);
-                Position spawn;
-                if(playerHandle.player.getSpawn().right() == SpawnPointType.WORLD) {
-                    spawn = PortalHelper.convertPosBetweenEndAndOverworld(playerHandle.player.getLocation());
-                } else spawn = playerHandle.player.getSpawn().left();
-                if(spawn != null) {
-                    playerHandle.player.teleport(spawn, PlayerTeleportEvent.TeleportCause.END_PORTAL);
-                }
+            Position spawn;
+            if(playerHandle.player.getSpawn().right() == SpawnPointType.WORLD) {
+                spawn = PortalHelper.convertPosBetweenEndAndOverworld(playerHandle.player.getLocation());
+            } else spawn = playerHandle.player.getSpawn().left();
+            if(spawn != null) {
+                playerHandle.player.teleport(spawn, PlayerTeleportEvent.TeleportCause.END_PORTAL);
             }
         }
     }

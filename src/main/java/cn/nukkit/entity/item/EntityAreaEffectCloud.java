@@ -350,9 +350,7 @@ public class EntityAreaEffectCloud extends Entity {
                     for (Entity collidingEntity : collidingEntities) {
                         if (!(collidingEntity instanceof EntityLiving)) continue;
 
-                        for (Effect effect : cloudEffects) {
-                            collidingEntity.addEffect(effect);
-                        }
+                        collidingEntity.attack(2);
                     }
                 }
             }
@@ -362,7 +360,7 @@ public class EntityAreaEffectCloud extends Entity {
 
         if (radius <= 1.5 && age >= waitTime) {
             setRadius(radius, false);
-            kill();
+            close();
         } else {
             setRadius(radius, sendRadius);
         }

@@ -16,6 +16,7 @@ import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -43,9 +44,9 @@ public final class PlayerChunkManager {
     };
     private final Player player;
     //保存着上tick已经发送的全部区块hash值
-    private final @NotNull LongOpenHashSet sentChunks;
+    private final @NotNull HashSet<Long> sentChunks;
     //保存着这tick将要发送的全部区块hash值
-    private final @NotNull LongOpenHashSet inRadiusChunks;
+    private final @NotNull HashSet<Long> inRadiusChunks;
     private final int trySendChunkCountPerTick;
     private final LongArrayPriorityQueue chunkSendQueue;
     private final Long2ObjectOpenHashMap<CompletableFuture<IChunk>> chunkLoadingQueue;
@@ -54,8 +55,8 @@ public final class PlayerChunkManager {
 
     public PlayerChunkManager(Player player) {
         this.player = player;
-        this.sentChunks = new LongOpenHashSet();
-        this.inRadiusChunks = new LongOpenHashSet();
+        this.sentChunks = new HashSet<>();
+        this.inRadiusChunks = new HashSet<>();
         this.chunkSendQueue = new LongArrayPriorityQueue(player.getViewDistance() * player.getViewDistance(), chunkDistanceComparator);
         this.chunkLoadingQueue = new Long2ObjectOpenHashMap<>(player.getViewDistance() * player.getViewDistance());
         this.trySendChunkCountPerTick = player.getChunkSendCountPerTick();
@@ -90,18 +91,35 @@ public final class PlayerChunkManager {
     }
 
     @ApiStatus.Internal
-    public LongOpenHashSet getUsedChunks() {
+    public HashSet<Long> getUsedChunks() {
         return sentChunks;
     }
 
     @ApiStatus.Internal
-    public LongOpenHashSet getInRadiusChunks() {
+    public HashSet<Long> getInRadiusChunks() {
         return inRadiusChunks;
     }
 
     @ApiStatus.Internal
     public void addSendChunk(int x, int z) {
         chunkSendQueue.enqueue(Level.chunkHash(x, z));
+    }
+
+    public synchronized void unloadAllUsedChunk(Level level) {
+        Iterator<Long> iterator = this.sentChunks.iterator();
+        while (iterator.hasNext()) {
+            long hash = iterator.next();
+
+            int chunkX = Level.getHashX(hash);
+            int chunkZ = Level.getHashZ(hash);
+            if (!level.unregisterChunkLoader(this.player, chunkX, chunkZ, false)) continue;
+
+            for (Entity entity : level.getChunkEntities(chunkX, chunkZ).values()) {
+                if (entity != this.player) entity.despawnFrom(this.player);
+            }
+
+            iterator.remove();
+        }
     }
 
     private void updateChunkSendingQueue() {
@@ -129,21 +147,26 @@ public final class PlayerChunkManager {
     }
 
     private void removeOutOfRadiusChunks() {
-        Set<Long> difference = new HashSet<>(Sets.difference(sentChunks, inRadiusChunks));
         // Unload blocks that are out of range
-        for (Long hash : difference) {
+        Iterator<Long> iterator = this.sentChunks.iterator();
+        while (iterator.hasNext()) {
+            long hash = iterator.next();
+            if (this.inRadiusChunks.contains(hash)) continue;
+
+            // Remove the chunk from the sent chunks
+            iterator.remove();
+
+            // Unload the chunk from the player
             int x = Level.getHashX(hash);
             int z = Level.getHashZ(hash);
-            if (player.level.unregisterChunkLoader(player, x, z)) {
-                for (Entity entity : player.level.getChunkEntities(x, z).values()) {
-                    if (entity != player) {
-                        entity.despawnFrom(player);
-                    }
+            if (!player.level.unregisterChunkLoader(player, x, z)) continue;
+
+            for (Entity entity : player.level.getChunkEntities(x, z).values()) {
+                if (entity != player) {
+                    entity.despawnFrom(player);
                 }
             }
         }
-        // The intersection of the remaining sentChunks and inRadiusChunks
-        sentChunks.removeAll(difference);
     }
 
     private void loadQueuedChunks(int trySendChunkCountPerTick, boolean force) {

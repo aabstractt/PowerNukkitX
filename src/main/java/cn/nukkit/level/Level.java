@@ -881,12 +881,10 @@ public class Level implements Metadatable {
     }
 
     public ChunkLoader[] getChunkLoaders(int chunkX, int chunkZ) {
-        long index = Level.chunkHash(chunkX, chunkZ);
-        if (this.chunkLoaders.containsKey(index)) {
-            return this.chunkLoaders.get(index).values().toArray(ChunkLoader.EMPTY_ARRAY);
-        } else {
-            return ChunkLoader.EMPTY_ARRAY;
-        }
+        Map<Integer, ChunkLoader> chunkLoaders = this.chunkLoaders.get(Level.chunkHash(chunkX, chunkZ));
+        if (chunkLoaders == null || chunkLoaders.isEmpty()) return ChunkLoader.EMPTY_ARRAY;
+
+        return chunkLoaders.values().toArray(ChunkLoader.EMPTY_ARRAY);
     }
 
     public void addChunkPacket(int chunkX, int chunkZ, DataPacket packet) {
@@ -902,13 +900,16 @@ public class Level implements Metadatable {
     public void registerChunkLoader(ChunkLoader loader, int chunkX, int chunkZ, boolean autoLoad) {
         int hash = loader.getLoaderId();
         long index = Level.chunkHash(chunkX, chunkZ);
-        if (!this.chunkLoaders.containsKey(index)) {
-            this.chunkLoaders.put(index, new HashMap<>());
-        } else if (this.chunkLoaders.get(index).containsKey(hash)) {
-            return;
+
+        Map<Integer, ChunkLoader> chunkLoaders = this.chunkLoaders.get(index);
+        if (chunkLoaders != null && chunkLoaders.containsKey(hash)) return;
+
+        if (chunkLoaders == null) {
+            chunkLoaders = new HashMap<>();
+            this.chunkLoaders.put(index, chunkLoaders);
         }
 
-        this.chunkLoaders.get(index).put(hash, loader);
+        chunkLoaders.put(hash, loader);
 
         if (!this.loaders.containsKey(hash)) {
             this.loaderCounter.put(hash, 1);
@@ -1012,8 +1013,17 @@ public class Level implements Metadatable {
         }
     }
 
+    private void debug(@NotNull String message) {
+        if (this.getFolderName().equalsIgnoreCase("mainkitmap")) {
+            System.out.println(message);
+        }
+    }
+
     public void doTick(int currentTick) {
+        this.debug("Ticking players");
         players.values().forEach(player -> player.getSession().tick());
+        this.debug("Ticking players done");
+
         requireProvider();
         try {
             getScheduler().mainThreadHeartbeat(currentTick);
@@ -1053,6 +1063,7 @@ public class Level implements Metadatable {
                 }
             }
 
+            this.debug("Ticking queue update");
             while (!this.normalUpdateQueue.isEmpty()) {
                 QueuedUpdate queuedUpdate = this.normalUpdateQueue.poll();
                 Block block = getBlock(queuedUpdate.block, queuedUpdate.block.layer);
@@ -1066,8 +1077,12 @@ public class Level implements Metadatable {
                     }
                 }
             }
+            this.debug("Ticking queue update done");
+
 
             if (!this.updateEntities.isEmpty()) {
+                this.debug("Ticking entities");
+
                 CompletableFuture.runAsync(() -> updateEntities.keySet()
                         .longParallelStream().forEach(id -> {
                             Entity entity = this.updateEntities.get(id);
@@ -1092,10 +1107,16 @@ public class Level implements Metadatable {
                         this.updateEntities.remove(id);
                     }
                 }
-            }
-            this.updateBlockEntities.removeIf(blockEntity -> !(!blockEntity.closed && blockEntity.isValid() && blockEntity.onUpdate()));
 
+                this.debug("Ticking entities done");
+            }
+            this.debug("Ticking block entities");
+            this.updateBlockEntities.removeIf(blockEntity -> !(!blockEntity.closed && blockEntity.isValid() && blockEntity.onUpdate()));
+            this.debug("Ticking block entities done");
+
+            this.debug("Ticking chunk");
             this.tickChunks();
+            this.debug("Ticking chunk done");
             synchronized (changedBlocks) {
                 if (!this.changedBlocks.isEmpty()) {
                     if (!this.players.isEmpty()) {
@@ -1158,7 +1179,10 @@ public class Level implements Metadatable {
         } catch (Exception e) {
             e.printStackTrace(System.err);
         } finally {
+            this.debug("Do check network");
             getPlayers().values().forEach(Player::checkNetwork);
+            this.debug("Do check network done");
+
             releaseTickCachedBlocks();
         }
     }
@@ -4317,7 +4341,11 @@ public class Level implements Metadatable {
     }
 
     public int getDimension() {
-        return getDimensionData().getDimensionId();
+        return switch (this.getFolderName()) {
+            case "nether" -> DIMENSION_NETHER;
+            case "end" -> DIMENSION_THE_END;
+            default -> DIMENSION_OVERWORLD;
+        };
     }
 
     public int getDimensionCount() {

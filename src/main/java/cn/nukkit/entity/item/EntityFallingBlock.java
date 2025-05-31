@@ -89,11 +89,15 @@ public class EntityFallingBlock extends Entity {
     protected void initEntity() {
         super.initEntity();
 
-        if (namedTag == null) return;
+        if (namedTag == null) {
+            this.close();
+
+            return;
+        }
 
         if (namedTag.contains("Block")) {
             BlockState blockState = NBTIO.getBlockStateHelper(namedTag.getCompound("Block"));
-            if (blockState == null || blockState.getIdentifier().equals(BlockID.GRAVEL) || blockState.getIdentifier().equals(BlockID.SAND)) {
+            if (blockState == null || blockState.getIdentifier().equals(BlockID.GRAVEL) || blockState.getIdentifier().equals(BlockID.SAND) || blockState.getIdentifier().equalsIgnoreCase(BlockID.RED_SAND)) {
                 close();
                 return;
             } else this.blockState = blockState;

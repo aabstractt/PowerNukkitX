@@ -3392,7 +3392,13 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
             entityRideable.dismountEntity(this);
         }
 
-        unloadAllUsedChunk();
+        try {
+            this.playerChunkManager.unloadAllUsedChunk(this.level);
+        } catch (Exception e) {
+            this.server.getLogger().error("Failed to unload used chunks while disconnecting " + this.getName(), e);
+        } finally {
+            this.playerChunkManager.getUsedChunks().clear();
+        }
 
         //send disconnection packet
         DisconnectPacket packet = new DisconnectPacket();
@@ -3463,31 +3469,6 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
         log.debug(reason);
         assert this.session != null;
         this.session.close(null);
-    }
-
-    public synchronized void unloadAllUsedChunk() {
-        //save player data
-        //unload chunk for the player
-        LongIterator iterator = this.playerChunkManager.getUsedChunks().iterator();
-        try {
-            while (iterator.hasNext()) {
-                long l = iterator.nextLong();
-                int chunkX = Level.getHashX(l);
-                int chunkZ = Level.getHashZ(l);
-                if (level.unregisterChunkLoader(this, chunkX, chunkZ, false)) {
-                    for (Entity entity : level.getChunkEntities(chunkX, chunkZ).values()) {
-                        if (entity != this) {
-                            entity.despawnFrom(this);
-                        }
-                    }
-                    iterator.remove();
-                }
-            }
-        } catch (Exception e) {
-            getServer().getLogger().error("Failed to unload all used chunks.", e);
-        } finally {
-            this.playerChunkManager.getUsedChunks().clear();
-        }
     }
 
     public void save() {
@@ -4258,7 +4239,15 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
         boolean switchLevel = false;
         if (!to.getLevel().equals(from.getLevel())) {
             switchLevel = true;
-            unloadAllUsedChunk();
+
+            try {
+                this.playerChunkManager.unloadAllUsedChunk(this.level);
+            } catch (Exception e) {
+                this.server.getLogger().error("Failed to unload used chunks while switching level for " + this.getName(), e);
+            } finally {
+                this.playerChunkManager.getUsedChunks().clear();
+            }
+
             //unload entities for old level
             Arrays.stream(from.getLevel().getEntities()).forEach(e -> e.despawnFrom(this));
         }
@@ -4856,9 +4845,6 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
             gameRulesChanged.gameRules = level.getGameRules();
             this.dataPacket(gameRulesChanged);
 
-            if (oldLevel.getDimension() != level.getDimension()) {
-                this.setDimension(level.getDimension());
-            }
             updateTrackingPositions(true);
             return true;
         }

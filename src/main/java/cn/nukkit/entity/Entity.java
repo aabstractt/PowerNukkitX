@@ -796,14 +796,15 @@ public abstract class Entity extends Location implements Metadatable, EntityID, 
         EntityEffectUpdateEvent event = new EntityEffectUpdateEvent(this, oldEffect, effect);
         Server.getInstance().getPluginManager().callEvent(event);
 
-        if (event.isCancelled()) {
+        if (event.isCancelled()) return;
+
+        if (oldEffect != null && (
+                Math.abs(effect.getAmplifier()) < Math.abs(oldEffect.getAmplifier()) ||
+                        (Math.abs(effect.getAmplifier()) == Math.abs(oldEffect.getAmplifier()) &&
+                                effect.getDuration() < oldEffect.getDuration())
+        )) {
             return;
         }
-
-        int oldAmplifier = oldEffect != null ? oldEffect.getAmplifier() : -1;
-        int oldDuration = oldEffect != null ? oldEffect.getDuration() : -1;
-        if (oldAmplifier > effect.getAmplifier() && oldDuration > effect.getDuration()) return;
-        if (oldAmplifier == effect.getAmplifier()) return;
 
         if (this instanceof Player player && effect.getId() != null) {
             MobEffectPacket packet = new MobEffectPacket();
@@ -1536,7 +1537,7 @@ public abstract class Entity extends Location implements Metadatable, EntityID, 
         }
 
         if (destination.equals(nearestPortal)) {
-            teleport(nearestPortal.add(0.5, 0, 0.5), PlayerTeleportEvent.TeleportCause.NETHER_PORTAL);
+            teleport(destination.add(0.5, 0, 0.5), PlayerTeleportEvent.TeleportCause.NETHER_PORTAL);
 
             return;
         }
