@@ -78,12 +78,13 @@ public class LoginHandler extends BedrockSessionPacketHandler {
         //The client won't send this data when it isn't logged in.
         if(server.getSettings().baseSettings().xboxAuth()) {
             //Verify if the titleId match with DeviceOs
-            int predictedDeviceOS = getPredictedDeviceOS(chainData);
+
+            /*int predictedDeviceOS = getPredictedDeviceOS(chainData);
             if(predictedDeviceOS != chainData.getDeviceOS()) {
                 session.close(TextFormat.RED + "Unexpected DeviceOS");
                 log.error("Player {} tried to connect with a different DeviceOS... [Expected {}, got {}]", chainData.getUsername(), predictedDeviceOS, chainData.getDeviceOS());
                 return;
-            }
+            } */ //Temporary removed because of microsoft.
         }
 
         //Verify if the language is valid
