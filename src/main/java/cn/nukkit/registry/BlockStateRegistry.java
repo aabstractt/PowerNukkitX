@@ -48,8 +48,7 @@ public final class BlockStateRegistry implements IRegistry<Integer, BlockState, 
                 int g = Integer.parseInt(hexString.substring(2,4), 16);
                 int b = Integer.parseInt(hexString.substring(4,6), 16);
                 int a = Integer.parseInt(hexString.substring(6,8), 16);
-                BlockColor.Tint tint = BlockColor.Tint.get(entry.get("tintMethod").toString().replace("\"", ""));
-                Block.VANILLA_BLOCK_COLOR_MAP.put(hash, new BlockColor(r, g, b, a, tint));
+                Block.VANILLA_BLOCK_COLOR_MAP.put(hash, new BlockColor(r, g, b, a));
             }
         } catch (IOException e) {
         }

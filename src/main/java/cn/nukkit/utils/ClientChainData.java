@@ -292,6 +292,7 @@ public final class ClientChainData implements LoginChainData {
                 JsonObject extra = chainMap.get("extraData").getAsJsonObject();
                 if (extra.has("displayName")) this.username = extra.get("displayName").getAsString();
                 if (extra.has("identity")) this.clientUUID = UUID.fromString(extra.get("identity").getAsString());
+                if (extra.has("XUID")) this.xuid = extra.get("XUID").getAsString();
 
                 JsonElement titleIdElement = extra.get("titleId");
                 if (titleIdElement != null && titleIdElement.isJsonPrimitive()) this.titleId = titleIdElement.getAsString();

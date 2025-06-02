@@ -7,17 +7,14 @@ import cn.nukkit.inventory.SpecialWindowId;
 import cn.nukkit.network.process.DataPacketProcessor;
 import cn.nukkit.network.protocol.ContainerClosePacket;
 import cn.nukkit.network.protocol.ProtocolInfo;
-import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 
-@Slf4j
 public class ContainerCloseProcessor extends DataPacketProcessor<ContainerClosePacket> {
 
     @Override
     public void handle(@NotNull PlayerHandle playerHandle, @NotNull ContainerClosePacket pk) {
         Player player = playerHandle.player;
         if (!player.spawned || pk.windowId == SpecialWindowId.PLAYER.getId() && !playerHandle.getInventoryOpen()) {
-            log.warn("{} tried to close his own inventory without it being open.", player.getName());
             return;
         }
 
@@ -32,11 +29,10 @@ public class ContainerCloseProcessor extends DataPacketProcessor<ContainerCloseP
                 playerHandle.removeWindow(playerHandle.getWindowIndex().get(pk.windowId));
             }
         }
-
+        
         if (pk.windowId == -1) {
             player.addWindow(player.getCraftingGrid(), SpecialWindowId.NONE.getId());
         }
-
         if (inventory != null) {
             ContainerClosePacket pk2 = new ContainerClosePacket();
             pk2.wasServerInitiated = false;
@@ -44,8 +40,7 @@ public class ContainerCloseProcessor extends DataPacketProcessor<ContainerCloseP
             pk2.type = inventory.getType();
             player.dataPacket(pk2);
             player.resetInventory();
-        } else log.warn("{} tried to close inventory {} without it being open. (null)", player.getName(), pk.windowId);
-
+        }
     }
 
     @Override
