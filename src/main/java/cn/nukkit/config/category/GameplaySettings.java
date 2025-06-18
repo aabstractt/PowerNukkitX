@@ -7,6 +7,9 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @EqualsAndHashCode(callSuper = true)
 @Data
 @Accessors(fluent = true)
@@ -47,6 +50,18 @@ public class GameplaySettings extends OkaeriConfig {
     boolean allowClientPacks = true;
     @Comment("pnx.settings.gameplay.serverAuthoritativeMovement")
     String serverAuthoritativeMovement = "server-auth";
+    @Comment("pnx.settings.gameplay.allowVibrantVisuals")
+    boolean allowVibrantVisuals = true;
+    @Comment("pnx.settings.gameplay.experiments")
+    ArrayList<String> experiments = new ArrayList<>(List.of(
+            "data_driven_items",
+            "data_driven_blocks_and_items",
+            "data_driven_biomes",
+            "upcoming_creator_features",
+            "gametest",
+            "experimental_molang_features",
+            "cameras"
+    ));
     @Comment("nukkit.server.settings.gameplaysettings.splashPotion")
     SplashPotionSettings splashPotion = new SplashPotionSettings();
     @Comment("nukkit.server.settings.gameplaysettings.enderPearl")
