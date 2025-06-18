@@ -2,6 +2,7 @@ package cn.nukkit.network.process.handler;
 
 import cn.nukkit.Player;
 import cn.nukkit.entity.data.property.EntityProperty;
+import cn.nukkit.level.Level;
 import cn.nukkit.nbt.tag.CompoundTag;
 import cn.nukkit.network.connection.BedrockSession;
 import cn.nukkit.network.protocol.AvailableEntityIdentifiersPacket;
@@ -127,7 +128,7 @@ public class SpawnResponseHandler extends BedrockSessionPacketHandler {
         startPk.yaw = (float) player.yaw;
         startPk.pitch = (float) player.pitch;
         startPk.seed = -1L;
-        startPk.dimension = (byte) (player.level.getDimension() & 0xff);
+        startPk.dimension = (byte) (Level.DIMENSION_OVERWORLD & 0xff);
         startPk.worldGamemode = Player.toNetworkGamemode(server.getDefaultGamemode());
         startPk.difficulty = server.getDifficulty();
         var spawn = player.getSafeSpawn();
@@ -142,7 +143,7 @@ public class SpawnResponseHandler extends BedrockSessionPacketHandler {
         startPk.gameRules = player.getLevel().getGameRules();
         startPk.levelId = "";
         startPk.worldName = server.getSubMotd();
-        startPk.generator = (byte) ((player.getLevel().getDimension() + 1) & 0xff); //0 旧世界 Old world, 1 主世界 Main world, 2 下界 Nether, 3 末地 End
+        startPk.generator = (byte) ((Level.DIMENSION_OVERWORLD + 1) & 0xff); //0 旧世界 Old world, 1 主世界 Main world, 2 下界 Nether, 3 末地 End
         startPk.serverAuthoritativeMovement = server.getServerAuthoritativeMovement();
         startPk.isInventoryServerAuthoritative = true;//enable item stack request packet
         startPk.blockNetworkIdsHashed = true;//enable blockhash
@@ -161,6 +162,7 @@ public class SpawnResponseHandler extends BedrockSessionPacketHandler {
 
     @Override
     public void handle(SetLocalPlayerAsInitializedPacket pk) {
+        System.out.println("SetLocalPlayerAsInitializedPacket received for " + this.player.getPlayerInfo().getUsername());
         log.debug("receive SetLocalPlayerAsInitializedPacket for {}", this.player.getPlayerInfo().getUsername());
         handle.onPlayerLocallyInitialized();
     }

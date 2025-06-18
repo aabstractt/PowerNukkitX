@@ -461,13 +461,12 @@ public abstract class Block extends Position implements Metadatable, AxisAligned
 
     public BlockColor getColor() {
         if (color != null) return color;
-        else color = VANILLA_BLOCK_COLOR_MAP.get(this.blockstate.blockStateHash()).clone();
+        else color = VANILLA_BLOCK_COLOR_MAP.get(this.blockstate.blockStateHash());
         if (color == null) {
             log.error("Failed to get color of block " + getName());
             log.error("Current block state hash: " + this.blockstate.blockStateHash());
             color = BlockColor.VOID_BLOCK_COLOR;
         }
-        color.applyTint(level.getBiomeId(getFloorX(), getFloorY(), getFloorZ()));
         return color;
     }
 

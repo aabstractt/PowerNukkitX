@@ -68,7 +68,6 @@ import cn.nukkit.network.protocol.*;
 import cn.nukkit.network.protocol.types.LevelSoundEvent;
 import cn.nukkit.network.protocol.types.PlayerAbility;
 import cn.nukkit.network.protocol.types.SpawnPointType;
-import cn.nukkit.network.protocol.types.biome.BiomeDefinitionData;
 import cn.nukkit.plugin.InternalPlugin;
 import cn.nukkit.plugin.Plugin;
 import cn.nukkit.registry.Registries;
@@ -87,7 +86,6 @@ import com.google.common.base.Preconditions;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
-import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.longs.Long2IntMap;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
@@ -318,7 +316,7 @@ public class Level implements Metadatable {
     private int updateLCG = ThreadLocalRandom.current().nextInt();
     private int tickRate;
     private long levelCurrentTick = 0;
-    private final Long2ObjectOpenHashMap<IntOpenHashSet> blockLightQueue = new Long2ObjectOpenHashMap<>(8);    
+    private final Map<Long, Map<Integer, Object>> blockLightQueue = new ConcurrentHashMap<>(8, 0.9f, 1);
     private final int dimensionCount;
     ///base tick system
     private final Thread baseTickThread;
@@ -610,8 +608,7 @@ public class Level implements Metadatable {
     public void close() {
         if(getServer().getSettings().levelSettings().levelThread() && baseTickThread.isAlive()) {
             this.baseTickGameLoop.stop();
-        }
-        remove();
+        } else remove();
     }
 
     private void remove() {
@@ -878,7 +875,7 @@ public class Level implements Metadatable {
         if (this.chunkLoaders.containsKey(index)) {
             return this.chunkLoaders.get(index).entrySet()
                     .stream()
-                    .filter(e -> (e.getValue() instanceof Player p && p.getPlayerChunkManager().getUsedChunks().contains(index)))
+                    .filter(e -> e.getValue() instanceof Player)
                     .collect(HashMap::new, (m, e) -> {
                         m.put(e.getKey(), (Player) e.getValue());
                     }, HashMap::putAll);
@@ -1021,7 +1018,7 @@ public class Level implements Metadatable {
 
     private void debug(@NotNull String message) {
         if (this.getFolderName().equalsIgnoreCase("mainkitmap")) {
-            System.out.println(message);
+            //System.out.println(message);
         }
     }
 
@@ -1093,9 +1090,7 @@ public class Level implements Metadatable {
                         .longParallelStream().forEach(id -> {
                             Entity entity = this.updateEntities.get(id);
                             if (entity != null && entity.isAlive() && entity.isInitialized() && entity instanceof EntityAsyncPrepare entityAsyncPrepare) {
-                                try {
-                                    entityAsyncPrepare.asyncPrepare(getTick());
-                                } catch(Exception e) {}
+                                entityAsyncPrepare.asyncPrepare(getTick());
                             }
                         }), Server.getInstance().getComputeThreadPool()).join();
 
@@ -1221,7 +1216,7 @@ public class Level implements Metadatable {
                 }
             }
             // Tick Weather
-            if (this.getDimension() == DIMENSION_OVERWORLD) {
+            if (this.getDimension() != DIMENSION_NETHER && this.getDimension() != DIMENSION_THE_END) {
                 if(getDayTime() == tickRate) {
                     setRaining(false);
                     setThundering(false);
@@ -1516,12 +1511,9 @@ public class Level implements Metadatable {
                     iter.remove();
                 }
 
-                CompletableFuture.runAsync(() -> {
-                    for (Entity entity : chunk.getEntities().values()) {
-                        entity.scheduleUpdate();
-                    }
-                });
-
+                for (Entity entity : chunk.getEntities().values()) {
+                    entity.scheduleUpdate();
+                }
                 int tickSpeed = gameRules.getInteger(GameRule.RANDOM_TICK_SPEED);
                 if (tickSpeed <= 0) {
                     continue;
@@ -2186,92 +2178,90 @@ public class Level implements Metadatable {
     }
 
     public void updateBlockLight() {
-        try {
-            int size = blockLightQueue.size();
-            if (size == 0) {
-                return;
-            }
-            Queue<Long> lightPropagationQueue = new ConcurrentLinkedQueue<>();
-            Queue<Object[]> lightRemovalQueue = new ConcurrentLinkedQueue<>();
-            Long2ObjectOpenHashMap<Object> visited = new Long2ObjectOpenHashMap<>();
-            Long2ObjectOpenHashMap<Object> removalVisited = new Long2ObjectOpenHashMap<>();
+        int size = blockLightQueue.size();
+        if (size == 0) {
+            return;
+        }
+        Queue<Long> lightPropagationQueue = new ConcurrentLinkedQueue<>();
+        Queue<Object[]> lightRemovalQueue = new ConcurrentLinkedQueue<>();
+        Long2ObjectOpenHashMap<Object> visited = new Long2ObjectOpenHashMap<>();
+        Long2ObjectOpenHashMap<Object> removalVisited = new Long2ObjectOpenHashMap<>();
 
-            var iter = blockLightQueue.entrySet().iterator();
-            while (iter.hasNext() && size-- > 0) {
-                var entry = iter.next();
-                long index = entry.getKey();
-                var blocks = entry.getValue();
-
-                iter.remove();
-                if (blocks == null || blocks.isEmpty()) continue;
-
-                int chunkX = Level.getHashX(index);
-                int chunkZ = Level.getHashZ(index);
-                int bx = chunkX << 4;
-                int bz = chunkZ << 4;
-                for (int blockHash : blocks) {
-                    int hi = (byte) (blockHash >>> 16);
-                    int lo = (short) blockHash;
-                    int y = ensureY(lo - 64);
-                    int x = (hi & 0xF) + bx;
-                    int z = ((hi >> 4) & 0xF) + bz;
-                    IChunk chunk = getChunk(x >> 4, z >> 4, false);
-                    if (chunk != null) {
-                        int lcx = x & 0xF;
-                        int lcz = z & 0xF;
-                        int oldLevel = chunk.getBlockLight(lcx, y, lcz);
-                        int newLevel = Registries.BLOCK.get(chunk.getBlockState(lcx, y, lcz), x, y, z, this).getLightLevel();
-                        if (oldLevel != newLevel) {
-                            this.setBlockLightAt(x, y, z, newLevel);
-                            long blockPosHash = Hash.hashBlock(x, y, z);
-                            if (newLevel < oldLevel) {
-                                removalVisited.put(blockPosHash, changeBlocksPresent);
-                                lightRemovalQueue.add(new Object[]{blockPosHash, oldLevel});
-                            } else {
-                                visited.put(blockPosHash, changeBlocksPresent);
-                                lightPropagationQueue.add(blockPosHash);
-                            }
+        var iter = blockLightQueue.entrySet().iterator();
+        while (iter.hasNext() && size-- > 0) {
+            var entry = iter.next();
+            iter.remove();
+            long index = entry.getKey();
+            var blocks = entry.getValue();
+            int chunkX = Level.getHashX(index);
+            int chunkZ = Level.getHashZ(index);
+            int bx = chunkX << 4;
+            int bz = chunkZ << 4;
+            for (int blockHash : blocks.keySet()) {
+                int hi = (byte) (blockHash >>> 16);
+                int lo = (short) blockHash;
+                int y = ensureY(lo - 64);
+                int x = (hi & 0xF) + bx;
+                int z = ((hi >> 4) & 0xF) + bz;
+                IChunk chunk = getChunk(x >> 4, z >> 4, false);
+                if (chunk != null) {
+                    int lcx = x & 0xF;
+                    int lcz = z & 0xF;
+                    int oldLevel = chunk.getBlockLight(lcx, y, lcz);
+                    int newLevel = Registries.BLOCK.get(chunk.getBlockState(lcx, y, lcz), x, y, z, this).getLightLevel();
+                    if (oldLevel != newLevel) {
+                        this.setBlockLightAt(x, y, z, newLevel);
+                        if (newLevel < oldLevel) {
+                            removalVisited.put(Hash.hashBlock(x, y, z), changeBlocksPresent);
+                            lightRemovalQueue.add(new Object[]{Hash.hashBlock(x, y, z), oldLevel});
+                        } else {
+                            visited.put(Hash.hashBlock(x, y, z), changeBlocksPresent);
+                            lightPropagationQueue.add(Hash.hashBlock(x, y, z));
                         }
                     }
                 }
             }
+        }
 
-            while (!lightRemovalQueue.isEmpty()) {
-                Object[] val = lightRemovalQueue.poll();
-                long node = (long) val[0];
-                int x = Hash.hashBlockX(node);
-                int y = Hash.hashBlockY(node);
-                int z = Hash.hashBlockZ(node);
+        while (!lightRemovalQueue.isEmpty()) {
+            Object[] val = lightRemovalQueue.poll();
+            long node = (long) val[0];
+            int x = Hash.hashBlockX(node);
+            int y = Hash.hashBlockY(node);
+            int z = Hash.hashBlockZ(node);
 
-                int lightLevel = (int) val[1];
+            int lightLevel = (int) val[1];
 
-                this.computeRemoveBlockLight(x - 1, y, z, lightLevel, lightRemovalQueue, lightPropagationQueue, removalVisited, visited);
-                this.computeRemoveBlockLight(x + 1, y, z, lightLevel, lightRemovalQueue, lightPropagationQueue, removalVisited, visited);
-                this.computeRemoveBlockLight(x, y - 1, z, lightLevel, lightRemovalQueue, lightPropagationQueue, removalVisited, visited);
-                this.computeRemoveBlockLight(x, y + 1, z, lightLevel, lightRemovalQueue, lightPropagationQueue, removalVisited, visited);
-                this.computeRemoveBlockLight(x, y, z - 1, lightLevel, lightRemovalQueue, lightPropagationQueue, removalVisited, visited);
-                this.computeRemoveBlockLight(x, y, z + 1, lightLevel, lightRemovalQueue, lightPropagationQueue, removalVisited, visited);
+            this.computeRemoveBlockLight(x - 1, y, z, lightLevel, lightRemovalQueue, lightPropagationQueue,
+                    removalVisited, visited);
+            this.computeRemoveBlockLight(x + 1, y, z, lightLevel, lightRemovalQueue, lightPropagationQueue,
+                    removalVisited, visited);
+            this.computeRemoveBlockLight(x, y - 1, z, lightLevel, lightRemovalQueue, lightPropagationQueue,
+                    removalVisited, visited);
+            this.computeRemoveBlockLight(x, y + 1, z, lightLevel, lightRemovalQueue, lightPropagationQueue,
+                    removalVisited, visited);
+            this.computeRemoveBlockLight(x, y, z - 1, lightLevel, lightRemovalQueue, lightPropagationQueue,
+                    removalVisited, visited);
+            this.computeRemoveBlockLight(x, y, z + 1, lightLevel, lightRemovalQueue, lightPropagationQueue,
+                    removalVisited, visited);
+        }
+
+        while (!lightPropagationQueue.isEmpty()) {
+            long node = lightPropagationQueue.poll();
+
+            int x = Hash.hashBlockX(node);
+            int y = Hash.hashBlockY(node);
+            int z = Hash.hashBlockZ(node);
+            int lightLevel = this.getBlockLightAt(x, y, z) - getBlock(x, y, z).getLightFilter();
+
+            if (lightLevel >= 1) {
+                this.computeSpreadBlockLight(x - 1, y, z, lightLevel, lightPropagationQueue, visited);
+                this.computeSpreadBlockLight(x + 1, y, z, lightLevel, lightPropagationQueue, visited);
+                this.computeSpreadBlockLight(x, y - 1, z, lightLevel, lightPropagationQueue, visited);
+                this.computeSpreadBlockLight(x, y + 1, z, lightLevel, lightPropagationQueue, visited);
+                this.computeSpreadBlockLight(x, y, z - 1, lightLevel, lightPropagationQueue, visited);
+                this.computeSpreadBlockLight(x, y, z + 1, lightLevel, lightPropagationQueue, visited);
             }
-
-            while (!lightPropagationQueue.isEmpty()) {
-                long node = lightPropagationQueue.poll();
-
-                int x = Hash.hashBlockX(node);
-                int y = Hash.hashBlockY(node);
-                int z = Hash.hashBlockZ(node);
-                int lightLevel = this.getBlockLightAt(x, y, z) - getBlock(x, y, z).getLightFilter();
-
-                if (lightLevel >= 1) {
-                    this.computeSpreadBlockLight(x - 1, y, z, lightLevel, lightPropagationQueue, visited);
-                    this.computeSpreadBlockLight(x + 1, y, z, lightLevel, lightPropagationQueue, visited);
-                    this.computeSpreadBlockLight(x, y - 1, z, lightLevel, lightPropagationQueue, visited);
-                    this.computeSpreadBlockLight(x, y + 1, z, lightLevel, lightPropagationQueue, visited);
-                    this.computeSpreadBlockLight(x, y, z - 1, lightLevel, lightPropagationQueue, visited);
-                    this.computeSpreadBlockLight(x, y, z + 1, lightLevel, lightPropagationQueue, visited);
-                }
-            }
-        } catch (Throwable e) {
-            log.error("Error while updating block light", e);
         }
     }
 
@@ -2314,12 +2304,12 @@ public class Level implements Metadatable {
 
     public void addBlockLightUpdate(int x, int y, int z) {
         long index = chunkHash(x >> 4, z >> 4);
-        IntOpenHashSet blockSet = blockLightQueue.get(index);
-        if (blockSet == null) {
-            blockSet = new IntOpenHashSet();
-            blockLightQueue.put(index, blockSet);
+        var currentMap = blockLightQueue.get(index);
+        if (currentMap == null) {
+            currentMap = new ConcurrentHashMap<>(8, 0.9f, 1);
+            this.blockLightQueue.put(index, currentMap);
         }
-        blockSet.add(Level.localBlockHash(x, y, z, this));
+        currentMap.put(Level.localBlockHash(x, y, z, this), changeBlocksPresent);
     }
 
     public boolean setBlock(Vector3 pos, Block block) {
@@ -3224,9 +3214,7 @@ public class Level implements Metadatable {
     public void setBlockStateAt(int x, int y, int z, int layer, BlockState state) {
         IChunk chunk = this.getChunk(x >> 4, z >> 4, true);
         chunk.setBlockState(x & 0x0f, ensureY(y), z & 0x0f, state, layer);
-        if(chunk.isFinished())
-            addBlockChange(x, y, z);
-
+        addBlockChange(x, y, z);
         temporalVector.setComponents(x, y, z);
         if (server.getSettings().chunkSettings().lightUpdates()) {
             updateAllLight(new Vector3(x, y, z));
@@ -3345,6 +3333,7 @@ public class Level implements Metadatable {
     }
 
     protected static final BlockColor VOID_BLOCK_COLOR = BlockColor.VOID_BLOCK_COLOR;
+    protected static final BlockColor WATER_BLOCK_COLOR = BlockColor.WATER_BLOCK_COLOR;
 
     public BlockColor getMapColorAt(int x, int z) {
         var color = VOID_BLOCK_COLOR.toAwtColor();
@@ -3354,7 +3343,23 @@ public class Level implements Metadatable {
             return VOID_BLOCK_COLOR;
 
         //在z轴存在高度差的地方，颜色变深或变浅
+        var nzy = getMapColoredBlockAt(x, z - 1);
+        if (nzy == null)
+            return block.getColor();
         color = block.getColor().toAwtColor();
+        if (nzy.getFloorY() > block.getFloorY()) {
+            color = darker(color, 0.875 - Math.min(5, nzy.getFloorY() - block.getFloorY()) * 0.05);
+        } else if (nzy.getFloorY() < block.getFloorY()) {
+            color = brighter(color, 0.875 - Math.min(5, block.getFloorY() - nzy.getFloorY()) * 0.05);
+        }
+
+        //效果不好，暂时禁用
+//        var deltaY = block.y - 128;
+//        if (deltaY > 0) {
+//            color = brighter(color, 1 - deltaY / (192 * 3));
+//        } else if (deltaY < 0) {
+//            color = darker(color, 1 - (-deltaY) / (192 * 3));
+//        }
 
         var up = block.getSide(BlockFace.UP);
         var up1 = block.getSideAtLayer(1, BlockFace.UP);
@@ -3363,13 +3368,6 @@ public class Level implements Metadatable {
             var g1 = color.getGreen();
             var b1 = color.getBlue();
             //在水下
-            BiomeDefinitionData data = Registries.BIOME.get(getBiomeId(block.getFloorX(), block.getFloorY(), block.getFloorZ())).data;
-            int colorInt = data.mapWaterColor;
-            int r = (int)( (((colorInt >> 16) & 0xff) / 255.0f) + BlockColor.WATER_BLOCK_COLOR.getRed()*3) / 4;
-            int g = (int) ((((colorInt >> 8) & 0xff) / 255.0f) + BlockColor.WATER_BLOCK_COLOR.getGreen()*3) / 4;
-            int b = (int) ((((colorInt) & 0xff) / 255.0f) + BlockColor.WATER_BLOCK_COLOR.getBlue()*3) / 4;
-            int a = (int) (((colorInt >> 24) & 0xff) / 255.0f);
-            BlockColor WATER_BLOCK_COLOR = new BlockColor(r, g, b, a);
             if (block.y < 62) {
                 //在海平面下
                 //海平面为62格。离海平面越远颜色越接近海洋颜色
@@ -3377,7 +3375,7 @@ public class Level implements Metadatable {
                 if (depth > 96) return WATER_BLOCK_COLOR;
                 b1 = WATER_BLOCK_COLOR.getBlue();
                 var radio = (depth / 96.0);
-                if (radio < 0.9) radio = 0.9;
+                if (radio < 0.5) radio = 0.5;
                 r1 += (WATER_BLOCK_COLOR.getRed() - r1) * radio;
                 g1 += (WATER_BLOCK_COLOR.getGreen() - g1) * radio;
             } else {
@@ -3387,22 +3385,6 @@ public class Level implements Metadatable {
                 g1 += (WATER_BLOCK_COLOR.getGreen() - g1) * 0.5;
             }
             color = new Color(r1, g1, b1);
-        }
-        if(block.isTransparent()) {
-            int y = block.getFloorY();
-            float light = 0.5f;
-            int r = (int) (color.getRed() * light);
-            int g = (int) (color.getGreen() * light);
-            int b = (int) (color.getBlue() * light);
-            color = new Color(r, g, b);
-        }
-        var nzy = getMapColoredBlockAt(x, z - 1);
-        if (nzy == null)
-            return block.getColor();
-        if (nzy.getFloorY() > block.getFloorY()) {
-            color = darker(color, 0.875 - Math.min(5, nzy.getFloorY() - block.getFloorY()) * 0.05);
-        } else if (nzy.getFloorY() < block.getFloorY()) {
-            color = brighter(color, 0.875 - Math.min(5, block.getFloorY() - nzy.getFloorY()) * 0.05);
         }
 
         return new BlockColor(color.getRed(), color.getGreen(), color.getBlue(), color.getAlpha());
@@ -3443,9 +3425,8 @@ public class Level implements Metadatable {
         int y = chunk.getHeightMap(chunkX, chunkZ);
         while (y >= getMinHeight()) {
             Block block = getBlock(x, y, z);
-            BlockColor color = block.getColor();
-            if (color == null) return null;
-            if (color.getAlpha() == 0 && color.getTint() == BlockColor.Tint.NONE) {
+            if (block.getColor() == null) return null;
+            if (block.getColor().getAlpha() == 0/* || block instanceof BlockFlowingWater*/) {
                 y--;
             } else {
                 return block;
