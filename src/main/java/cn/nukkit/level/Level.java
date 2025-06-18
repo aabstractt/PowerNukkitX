@@ -90,6 +90,7 @@ import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
+import it.unimi.dsi.fastutil.longs.LongArraySet;
 import it.unimi.dsi.fastutil.longs.LongList;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
@@ -265,6 +266,7 @@ public class Level implements Metadatable {
     // Computation atomicity may be required in addChunkPacket(int, int, DataPacket)
     private final ConcurrentHashMap<Long, Deque<DataPacket>> chunkPackets = new ConcurrentHashMap<>();
     @NonComputationAtomic
+    private final LongArraySet unloadingChunks = new LongArraySet();
     private final Long2ObjectNonBlockingMap<Long> unloadQueue = new Long2ObjectNonBlockingMap<>();
     private final ConcurrentHashMap<Long, TickCachedBlockStore> tickCachedBlocks = new ConcurrentHashMap<>();
     private final LongSet highLightChunks = new LongOpenHashSet();
@@ -3511,7 +3513,7 @@ public class Level implements Metadatable {
             processChunkRequest();
 
             if (currentTick.getTick() % 100 == 0) {
-                doLevelGarbageCollection(false);
+                doLevelGarbageCollection();
             }
         } catch (Exception e) {
             getServer().getLogger().error("Subtick Thread for level " + getFolderName() + " failed.", e);
@@ -3542,7 +3544,6 @@ public class Level implements Metadatable {
                             pk.subChunkCount = pair.right();
                             pk.data = pair.left();
                             player.sendChunk(x, z, pk);
-
                             player.refreshBlockEntity(chunk);
                         }
                     }
@@ -3778,6 +3779,10 @@ public class Level implements Metadatable {
         }
 
         IChunk chunk = this.getChunk(x, z);
+
+        if(!chunk.isInitiated()) {
+            return false;
+        }
 
         if (chunk != null && chunk.getProvider() != null) {
             ChunkUnloadEvent ev = new ChunkUnloadEvent(chunk);
@@ -4039,7 +4044,7 @@ public class Level implements Metadatable {
      *
      * @return the list
      */
-    public void doLevelGarbageCollection(boolean force) {
+    public void doLevelGarbageCollection() {
         //gcBlockInventoryMetaData
         for (var entry : new HashMap<>(this.getBlockMetadata().getBlockMetadataMap()).entrySet()) {
             String key = entry.getKey();
@@ -4091,10 +4096,11 @@ public class Level implements Metadatable {
     }
 
     public void unloadChunks(int maxUnload, boolean force) {
+
         if (!this.unloadQueue.isEmpty()) {
             long now = System.currentTimeMillis();
 
-            LongList toRemove = null;
+            LongList toRemove = new LongArrayList();
             for (var entry : unloadQueue.fastEntrySet()) {
                 long index = entry.getLongKey();
                 if (isChunkInUse(index)) {
@@ -4104,26 +4110,24 @@ public class Level implements Metadatable {
                     long time = entry.getValue();
                     if (maxUnload <= 0) {
                         break;
-                    } else if (time > (now - Server.getInstance().getSettings().levelSettings().chunkUnloadDelay())) {
+                    } else if (time < (now - Server.getInstance().getSettings().levelSettings().chunkUnloadDelay())) {
                         continue;
                     }
                 }
 
-                if (toRemove == null) toRemove = new LongArrayList();
                 toRemove.add(index);
             }
 
-            if (toRemove != null) {
-                int size = toRemove.size();
-                for (int i = 0; i < size; i++) {
-                    long index = toRemove.getLong(i);
-                    int X = getHashX(index);
-                    int Z = getHashZ(index);
+            int size = toRemove.size();
 
-                    if (this.unloadChunk(X, Z, true)) {
-                        this.unloadQueue.remove(index);
-                        --maxUnload;
-                    }
+            for (int i = 0; i < size; i++) {
+                long index = toRemove.getLong(i);
+                int X = getHashX(index);
+                int Z = getHashZ(index);
+
+                if (this.unloadChunk(X, Z, true)) {
+                    this.unloadQueue.remove(index);
+                    --maxUnload;
                 }
             }
         }

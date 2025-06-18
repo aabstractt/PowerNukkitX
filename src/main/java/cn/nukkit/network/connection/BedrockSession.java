@@ -353,6 +353,8 @@ public class BedrockSession {
             return;
         }
 
+        log.warn("Closing session {} (username: {}) with reason: {}", this.getSocketAddress(), this.subClientId, reason);
+
         //when a player haven't login,it only hold a BedrockSession,and Player Instance is null
         if (reason != null) {
             DisconnectPacket packet = new DisconnectPacket();
