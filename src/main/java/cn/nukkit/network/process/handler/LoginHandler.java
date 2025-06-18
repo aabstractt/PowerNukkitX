@@ -41,6 +41,8 @@ public class LoginHandler extends BedrockSessionPacketHandler {
     @Override
     @SneakyThrows
     public void handle(LoginPacket pk) {
+        log.info("Player {} is trying to login with XUID: {}", pk.username, pk.clientUUID);
+
         var server = this.session.getServer();
 
         //check the player login time
@@ -49,6 +51,8 @@ public class LoginHandler extends BedrockSessionPacketHandler {
             log.debug("disconnection due to noReason");
             session.sendPlayStatus(PlayStatusPacket.LOGIN_FAILED_CLIENT, true);
             session.close(message);
+
+            log.warn("Player {} tried to login with an invalid login time: {}", pk.username, pk.issueUnixTime);
             return;
         }
 
@@ -57,6 +61,8 @@ public class LoginHandler extends BedrockSessionPacketHandler {
         //verify the player if enable the xbox-auth
         if (!chainData.isXboxAuthed() && server.getSettings().baseSettings().xboxAuth()) {
             log.debug("disconnection due to notAuthenticated");
+            log.warn("Player {} tried to login without Xbox authentication while Xbox auth is enabled", pk.username);
+
             session.close("disconnectionScreen.notAuthenticated");
             return;
         }
@@ -64,6 +70,8 @@ public class LoginHandler extends BedrockSessionPacketHandler {
         //Verify the number of server player
         if (server.getOnlinePlayers().size() >= server.getMaxPlayers()) {
             log.debug("disconnection due to serverFull");
+            log.warn("Player {} tried to login while the server is full", pk.username);
+
             session.close("disconnectionScreen.serverFull");
             return;
         }
@@ -75,26 +83,17 @@ public class LoginHandler extends BedrockSessionPacketHandler {
             Server.getInstance().getNetwork().replaceSessionAddress(oldAddress, session.getAddress(), session);
         }
 
-        //The client won't send this data when it isn't logged in.
-        if(server.getSettings().baseSettings().xboxAuth()) {
-            //Verify if the titleId match with DeviceOs
-
-            /*int predictedDeviceOS = getPredictedDeviceOS(chainData);
-            if(predictedDeviceOS != chainData.getDeviceOS()) {
-                session.close(TextFormat.RED + "Unexpected DeviceOS");
-                log.error("Player {} tried to connect with a different DeviceOS... [Expected {}, got {}]", chainData.getUsername(), predictedDeviceOS, chainData.getDeviceOS());
-                return;
-            } */ //Temporary removed because of microsoft.
-        }
-
         //Verify if the language is valid
         if(!isValidLanguage(chainData.getLanguageCode())) {
+            log.warn("Player {} tried to login with an invalid language: {}", pk.username, chainData.getLanguageCode());
             session.close(TextFormat.RED + "Unexpected Language");
+
             return;
         }
 
         //Verify if the GameVersion has valid format
         if(chainData.getGameVersion().split("\\.").length != 3 && !Server.getInstance().getSettings().gameplaySettings().allowBeta()) {
+            log.warn("Player {} tried to login with an invalid game version: {}", pk.username, chainData.getGameVersion());
             session.close(TextFormat.RED + "Unexpected GameVersion");
             return;
         }
@@ -105,6 +104,7 @@ public class LoginHandler extends BedrockSessionPacketHandler {
                 CurrentInputMode <= InputMode.UNDEFINED.getOrdinal() ||
                 CurrentInputMode >= InputMode.COUNT.getOrdinal()
         ) {
+            log.warn("Player {} tried to login with an invalid input mode: {}", pk.username, CurrentInputMode);
             log.debug("disconnection due to invalid input mode");
             session.close(TextFormat.RED + "Unexpected InputMode");
             return;
@@ -116,6 +116,7 @@ public class LoginHandler extends BedrockSessionPacketHandler {
                 DefaultInputMode <= InputMode.UNDEFINED.getOrdinal() ||
                 DefaultInputMode >= InputMode.COUNT.getOrdinal()
         ) {
+            log.warn("Player {} tried to login with an invalid default input mode: {}", pk.username, DefaultInputMode);
             log.debug("disconnection due to invalid input mode");
             session.close(TextFormat.RED + "Unexpected DefaultInputMode");
             return;
@@ -130,12 +131,14 @@ public class LoginHandler extends BedrockSessionPacketHandler {
                 username.equalsIgnoreCase("rcon") ||
                 username.equalsIgnoreCase("console")
         ) {
+            log.warn("Player {} tried to login with an invalid name: {}", uniqueId, username);
             log.debug("disconnection due to invalidName");
             session.close("disconnectionScreen.invalidName");
             return;
         }
 
         if (!pk.skin.isValid()) {
+            log.warn("Player {} tried to login with an invalid skin", uniqueId);
             log.debug("disconnection due to invalidSkin");
             session.close("disconnectionScreen.invalidSkin");
             return;
@@ -167,6 +170,7 @@ public class LoginHandler extends BedrockSessionPacketHandler {
         session.setAuthenticated();
 
         if (!server.isWhitelisted((info.getUsername()).toLowerCase(Locale.ENGLISH))) {
+            log.warn("Player {} tried to login while not being whitelisted", info.getUsername());
             log.debug("disconnection due to white-listed");
             session.close("Server is white-listed");
             return;
@@ -175,6 +179,7 @@ public class LoginHandler extends BedrockSessionPacketHandler {
         var entry = server.getNameBans().getEntires().get(info.getUsername().toLowerCase(Locale.ENGLISH));
         if (entry != null) {
             String reason = entry.getReason();
+            log.warn("Player {} tried to login while banned: {}", info.getUsername(), reason);
             log.debug("disconnection due to named ban");
             session.close(!reason.isEmpty() ? "You are banned. Reason: " + reason : "You are banned");
             return;
@@ -185,6 +190,8 @@ public class LoginHandler extends BedrockSessionPacketHandler {
         } else {
             session.getMachine().fire(SessionState.RESOURCE_PACK);
         }
+
+        log.info("Player {} logged in successfully using the Xbox User Id {}", info.getUsername(), chainData.getXUID());
     }
 
     private int getPredictedDeviceOS(ClientChainData chainData) {
