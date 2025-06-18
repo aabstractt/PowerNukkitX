@@ -694,7 +694,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
             pk.x = this.getSpawn().first().getFloorX();
             pk.y = this.getSpawn().first().getFloorY();
             pk.z = this.getSpawn().first().getFloorZ();
-            pk.dimension = this.getSpawn().first().getLevel().getDimension();
+            pk.dimension = Level.DIMENSION_OVERWORLD;
             this.dataPacket(pk);
         }
 
@@ -1227,6 +1227,8 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
         //init entity data property
         this.setDataProperty(NAME, info.getUsername(), false);
         this.setDataProperty(NAMETAG_ALWAYS_SHOW, 1, false);
+
+        System.out.println("Player " + this.getName() + " has been initialized locally");
 
         PlayerJoinEvent playerJoinEvent = new PlayerJoinEvent(this,
                 new TranslationContainer(TextFormat.YELLOW + "%multiplayer.player.joined", new String[]{
@@ -2177,7 +2179,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
         pk.x = (int) this.spawnPoint.x;
         pk.y = (int) this.spawnPoint.y;
         pk.z = (int) this.spawnPoint.z;
-        pk.dimension = this.spawnPoint.level.getDimension();
+        pk.dimension = Level.DIMENSION_OVERWORLD;
         this.dataPacket(pk);
     }
 
@@ -3371,16 +3373,6 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
                 String.valueOf(this.getPort()),
                 this.getServer().getLanguage().tr(reason)));
 
-        resetInventory();
-        for (var inv : this.windows.keySet()) {
-            if (this.permanentWindows.contains(windows.get(inv))) {
-                int windowId = this.getWindowId(inv);
-                playerHandle.setClosingWindowId(windowId);
-                inv.close(this);
-                updateTrackingPositions(true);
-            }
-        }
-
         //handle scoreboardManager#beforePlayerQuit
         var scoreboardManager = this.getServer().getScoreboardManager();
         if (scoreboardManager != null) {
@@ -3417,7 +3409,17 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
                 this.stopFishing(false);
             }
         }
+
         // Close the temporary windows first, so they have chance to change all inventories before being disposed
+        resetInventory();
+        for (Entry<Inventory, Integer> entry : this.windows.entrySet()) {
+            if (!this.permanentWindows.contains(entry.getValue())) continue;
+
+            playerHandle.setClosingWindowId(entry.getValue());
+            entry.getKey().close(this);
+            updateTrackingPositions(true);
+        }
+
         if (ev != null && ev.getAutoSave() && namedTag != null) {
             this.save();
         }
@@ -4826,7 +4828,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
             spawnPosition.x = spawn.getFloorX();
             spawnPosition.y = spawn.getFloorY();
             spawnPosition.z = spawn.getFloorZ();
-            spawnPosition.dimension = spawn.getLevel().getDimension();
+            spawnPosition.dimension = Level.DIMENSION_OVERWORLD;
             this.dataPacket(spawnPosition);
 
             // Remove old chunks

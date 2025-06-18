@@ -1017,7 +1017,7 @@ public class Level implements Metadatable {
 
     private void debug(@NotNull String message) {
         if (this.getFolderName().equalsIgnoreCase("mainkitmap")) {
-            System.out.println(message);
+            //System.out.println(message);
         }
     }
 
