@@ -41,11 +41,8 @@ import cn.nukkit.math.BlockFace;
 import cn.nukkit.math.Vector2;
 import cn.nukkit.math.Vector3;
 import cn.nukkit.nbt.tag.CompoundTag;
-import cn.nukkit.network.protocol.AddEntityPacket;
-import cn.nukkit.network.protocol.BossEventPacket;
-import cn.nukkit.network.protocol.DataPacket;
-import cn.nukkit.network.protocol.EntityEventPacket;
-import cn.nukkit.network.protocol.LevelSoundEventPacket;
+import cn.nukkit.network.protocol.*;
+import cn.nukkit.network.protocol.types.LevelSoundEvent;
 import cn.nukkit.plugin.InternalPlugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -173,7 +170,7 @@ public class EntityEnderDragon extends EntityBoss implements EntityFlyable {
         }
         if (currentTick % 2 == 0) {
             if(currentTick % ((toHorizontal().distance(Vector2.ZERO) < 1) ? 10 : 20) == 0) {
-                getLevel().addLevelSoundEvent(this, LevelSoundEventPacket.SOUND_FLAP, -1, this.getIdentifier(), false, false);
+                getLevel().addLevelSoundEvent(this, LevelSoundEvent.FLAP, -1, this.getIdentifier(), false, false);
             }
             for (Entity e : this.getLevel().getEntities()) {
                 if (e instanceof EntityEnderCrystal) {
@@ -195,7 +192,7 @@ public class EntityEnderDragon extends EntityBoss implements EntityFlyable {
     public void kill() {
         if(deathTicks == -1) {
             deathTicks = 190;
-            getLevel().addLevelSoundEvent(this, LevelSoundEventPacket.SOUND_DEATH, -1, getIdentifier(), false, false);
+            getLevel().addLevelSoundEvent(this, LevelSoundEvent.DEATH, -1, getIdentifier(), false, false);
             EntityEventPacket packet = new EntityEventPacket();
             packet.event = EntityEventPacket.ENDER_DRAGON_DEATH;
             packet.eid = getId();

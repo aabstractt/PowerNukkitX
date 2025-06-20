@@ -1,12 +1,27 @@
 package cn.nukkit.utils;
 
+import cn.nukkit.nbt.NBTIO;
+import cn.nukkit.nbt.tag.CompoundTag;
+import cn.nukkit.registry.ItemRegistry;
+
 import java.awt.*;
+import java.io.IOException;
 
 /**
  * @author Snake1999
  * @since 2016/1/10
  */
-public class BlockColor {
+public class BlockColor implements Cloneable {
+
+    private static final CompoundTag tint_tag;
+
+    static {
+        try (var stream = ItemRegistry.class.getClassLoader().getResourceAsStream("gamedata/unknown/tint_map.nbt")) {
+            tint_tag = NBTIO.readCompressed(stream);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     public static final BlockColor TRANSPARENT_BLOCK_COLOR = new BlockColor(0x00, 0x00, 0x00, 0x00);
     public static final BlockColor VOID_BLOCK_COLOR = TRANSPARENT_BLOCK_COLOR;
