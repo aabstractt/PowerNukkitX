@@ -19,14 +19,13 @@ public class ContainerCloseProcessor extends DataPacketProcessor<ContainerCloseP
         }
 
         Inventory inventory = player.getWindowById(pk.windowId);
-
-        if (playerHandle.getWindowIndex().containsKey(pk.windowId)) {
+        if (inventory != null) {
             if (pk.windowId == SpecialWindowId.PLAYER.getId()) {
                 playerHandle.setClosingWindowId(pk.windowId);
                 player.getInventory().close(player);
                 playerHandle.setInventoryOpen(false);
             } else {
-                playerHandle.removeWindow(playerHandle.getWindowIndex().get(pk.windowId));
+                playerHandle.removeWindow(inventory);
             }
         }
         

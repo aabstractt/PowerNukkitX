@@ -3,6 +3,7 @@ package cn.nukkit;
 import cn.nukkit.AdventureSettings.Type;
 import cn.nukkit.api.UsedByReflection;
 import cn.nukkit.block.Block;
+import cn.nukkit.block.BlockAir;
 import cn.nukkit.block.BlockBed;
 import cn.nukkit.block.BlockID;
 import cn.nukkit.block.BlockLiquid;
@@ -24,6 +25,7 @@ import cn.nukkit.entity.EntityHuman;
 import cn.nukkit.entity.EntityInteractable;
 import cn.nukkit.entity.EntityLiving;
 import cn.nukkit.entity.EntityRideable;
+import cn.nukkit.entity.data.EntityDataTypes;
 import cn.nukkit.entity.data.EntityFlag;
 import cn.nukkit.entity.data.PlayerFlag;
 import cn.nukkit.entity.data.Skin;
@@ -124,6 +126,7 @@ import cn.nukkit.utils.LoginChainData;
 import cn.nukkit.utils.TextFormat;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.oxo42.stateless4j.StateMachine;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.BiMap;
@@ -632,6 +635,12 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
      */
     protected void doFirstSpawn() {
         this.spawned = true;
+
+        super.initEntity();
+
+        this.setPlayerFlag(PlayerFlag.SLEEP);
+        this.setDataFlag(EntityFlag.HAS_GRAVITY);
+        this.setDataProperty(EntityDataTypes.BED_POSITION, new BlockVector3(0, 0, 0), false);
 
         this.getSession().syncCraftingData();
         this.getSession().syncInventory();
@@ -3366,6 +3375,17 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
                 this.getAddress(),
                 String.valueOf(this.getPort()),
                 this.getServer().getLanguage().tr(reason)));
+
+        Map<Integer, Inventory> windowsCopy = new HashMap<>(this.windowIndex);
+        for (Entry<Integer, Inventory> entry : windowsCopy.entrySet()) {
+            if (!this.permanentWindows.contains(entry.getKey())) continue;
+
+            playerHandle.setClosingWindowId(entry.getKey());
+            entry.getValue().close(this);
+            updateTrackingPositions(true);
+        }
+        // Clear the windowsCopy map to avoid memory leaks
+        windowsCopy.clear();
 
         //handle scoreboardManager#beforePlayerQuit
         var scoreboardManager = this.getServer().getScoreboardManager();

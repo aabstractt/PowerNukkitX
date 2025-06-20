@@ -19,8 +19,9 @@ public class SessionStartHandler extends BedrockSessionPacketHandler {
         int protocol = pk.protocolVersion;
         if (protocol != ProtocolInfo.CURRENT_PROTOCOL) {
             session.sendPlayStatus(protocol < ProtocolInfo.CURRENT_PROTOCOL ? PlayStatusPacket.LOGIN_FAILED_CLIENT : PlayStatusPacket.LOGIN_FAILED_SERVER, true);
-            var message = protocol < ProtocolInfo.CURRENT_PROTOCOL ? "disconnectionScreen.outdatedClient" : "disconnectionScreen.outdatedServer";
-            session.close(message);
+            session.flushSendBuffer();
+
+            session.close(protocol < ProtocolInfo.CURRENT_PROTOCOL ? "disconnectionScreen.outdatedClient" : "disconnectionScreen.outdatedServer");
             return;
         }
 

@@ -179,6 +179,7 @@ public class BedrockSession {
         if (isDisconnected()) {
             return;
         }
+
         DataPacketSendEvent ev = new DataPacketSendEvent(this.getPlayer(), packet);
         Server.getInstance().getPluginManager().callEvent(ev);
         if (ev.isCancelled()) {
@@ -214,11 +215,13 @@ public class BedrockSession {
 
     public void sendPacketImmediately(@NotNull DataPacket packet) {
         if (isDisconnected()) {
+            log.warn("Attempted to send packet {} while session is disconnected", packet.getClass().getSimpleName());
             return;
         }
         DataPacketSendEvent ev = new DataPacketSendEvent(this.getPlayer(), packet);
         Server.getInstance().getPluginManager().callEvent(ev);
         if (ev.isCancelled()) {
+            log.warn("Packet send event was cancelled for packet: {}", packet.getClass().getSimpleName());
             return;
         }
         this.peer.sendPacketImmediately(this.subClientId, 0, packet);
@@ -353,7 +356,8 @@ public class BedrockSession {
             return;
         }
 
-        log.warn("Closing session {} (username: {}) with reason: {}", this.getSocketAddress(), this.subClientId, reason);
+        Player player = this.getPlayer();
+        log.warn("Closing session {} (username: {}) with reason: {}", this.getSocketAddress(), player == null ? "Unknown" : player.getName(), reason);
 
         //when a player haven't login,it only hold a BedrockSession,and Player Instance is null
         if (reason != null) {
@@ -364,6 +368,7 @@ public class BedrockSession {
 
         Server.getInstance().getScheduler().scheduleDelayedTask(InternalPlugin.INSTANCE, () -> {
             if (isSubClient()) {
+                log.warn("Closing sub-client session {} (subClientId: {})", this.getSocketAddress(), this.subClientId);
                 // FIXME: Do sub-clients send a server-bound DisconnectPacket?
             } else {
                 // Primary sub-client controls the connection
