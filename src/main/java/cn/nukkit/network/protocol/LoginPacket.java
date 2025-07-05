@@ -65,13 +65,22 @@ public class LoginPacket extends DataPacket {
     }
 
     private void decodeChainData(BinaryStream binaryStream) {
-        String chainData = new String(binaryStream.get(binaryStream.getLInt()), StandardCharsets.UTF_8);
-        JsonObject jwt = JsonParser.parseString(chainData).getAsJsonObject();
-        String certificateRaw = jwt.get("Certificate").getAsString();
-        JsonObject certificate = JsonParser.parseString(certificateRaw).getAsJsonObject();
-        JsonArray chain = certificate.get("chain").getAsJsonArray();
-        for(int i = 0; i < chain.size(); i++) {
-            JsonObject chainMap = decodeToken(chain.get(i).getAsString());
+
+        Map<String, Object> map = JSONUtils.from(new String(binaryStream.get(binaryStream.getLInt()), StandardCharsets.UTF_8),
+                new TypeToken<Map<String, Object>>() {
+                }.getType());
+        String certificate = (String) map.get("Certificate");
+        if (certificate != null) {
+            map = JSONUtils.from(certificate,
+                    new TypeToken<Map<String, Object>>() {
+                    }.getType());
+        }
+
+        List<String> chains = (List<String>) map.get("chain");
+        if (chains == null || chains.isEmpty()) {
+            return;
+        }        for (String c : chains) {
+            JsonObject chainMap = decodeToken(c);
             if (chainMap == null) continue;
             if (chainMap.has("extraData")) {
                 if (chainMap.has("iat")) {
@@ -80,7 +89,7 @@ public class LoginPacket extends DataPacket {
                 JsonObject extra = chainMap.get("extraData").getAsJsonObject();
                 if (extra.has("displayName")) this.username = extra.get("displayName").getAsString();
                 if (extra.has("identity")) this.clientUUID = UUID.fromString(extra.get("identity").getAsString());
-                if (extra.has("titleId") && !extra.get("titleId").isJsonNull()) this.titleId = extra.get("titleId").getAsString();
+                if (extra.has("titleId") && extra.get("titleId").isJsonPrimitive()) this.titleId = extra.get("titleId").getAsString();
             }
         }
     }

@@ -1,9 +1,9 @@
 package cn.nukkit;
 
 import cn.nukkit.AdventureSettings.Type;
+import cn.nukkit.api.UnintendedClientBehaviour;
 import cn.nukkit.api.UsedByReflection;
 import cn.nukkit.block.Block;
-import cn.nukkit.block.BlockAir;
 import cn.nukkit.block.BlockBed;
 import cn.nukkit.block.BlockID;
 import cn.nukkit.block.BlockLiquid;
@@ -25,6 +25,7 @@ import cn.nukkit.entity.EntityHuman;
 import cn.nukkit.entity.EntityInteractable;
 import cn.nukkit.entity.EntityLiving;
 import cn.nukkit.entity.EntityRideable;
+import cn.nukkit.entity.data.EntityDataTypes;
 import cn.nukkit.entity.data.EntityFlag;
 import cn.nukkit.entity.data.PlayerFlag;
 import cn.nukkit.entity.data.Skin;
@@ -123,6 +124,7 @@ import cn.nukkit.utils.DummyBossBar;
 import cn.nukkit.utils.Identifier;
 import cn.nukkit.utils.LoginChainData;
 import cn.nukkit.utils.TextFormat;
+import cn.nukkit.utils.Utils;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.google.common.base.Preconditions;
@@ -143,8 +145,11 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.UnmodifiableView;
 
+import java.awt.*;
 import java.net.InetSocketAddress;
 import java.util.*;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.Map.Entry;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -345,6 +350,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
     private Pair<Location, Long> lastTeleportMessage;
     ///
 
+    private Color locatorBarColor;
     private final @NotNull PlayerInfo info;
 
     @UsedByReflection
@@ -374,6 +380,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
         this.uuid = info.getUniqueId();
         this.rawUUID = Binary.writeUUID(info.getUniqueId());
         this.setSkin(info.getSkin());
+        this.locatorBarColor = new Color(Utils.rand(0, 255), Utils.rand(0, 255), Utils.rand(0, 255));
     }
 
     /**
@@ -1913,7 +1920,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
     public void setDisplayName(String displayName) {
         this.displayName = displayName;
         if (this.spawned) {
-            this.server.updatePlayerListData(this.getUniqueId(), this.getId(), this.getDisplayName(), this.getSkin(), this.getLoginChainData().getXUID());
+            this.server.updatePlayerListData(this.getUniqueId(), this.getId(), this.getDisplayName(), this.getSkin(), this.getLoginChainData().getXUID(), this.getLocatorBarColor());
         }
     }
 
@@ -4378,6 +4385,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
         return id;
     }
 
+    @UnintendedClientBehaviour
     public void updateForm(Form<?> form) {
         if (!form.isViewer(this)) {
             return;
@@ -4580,6 +4588,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
      * @return The unique identifier assigned to the window if successfully added and opened; -1 if the window fails to be added.
      */
     public int addWindow(@NotNull Inventory inventory) {
+        if(getTopWindow().isPresent() || inventoryOpen) return -1;
         Preconditions.checkNotNull(inventory);
         if (this.windows.containsKey(inventory)) {
             return this.windows.get(inventory);
@@ -4750,6 +4759,19 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
     }
 
     /**
+     * @Since 1.21.90 (818)
+     * The client closes inventores when the SLEEP player tag is set.
+     * Even the players inventory, which cannot be closed with the ContainerClosePacket
+     * This won't close the inventories on the server side, but the client will send us the ContainerClose which in return will close the inventory on the server side
+     * We're setting the flag manually because setPlayerFlag just flips the bit. But we need to set the bits in the correct order.
+     */
+    @UnintendedClientBehaviour
+    public void forceClientCloseInventory() {
+        setDataProperty(PLAYER_FLAGS, getDataProperty(PLAYER_FLAGS) | 0x2);
+        getLevel().getScheduler().scheduleDelayedTask(() -> setDataProperty(PLAYER_FLAGS, getDataProperty(PLAYER_FLAGS) & 0x1), 2);
+    }
+
+    /**
      * 获取上一个关闭窗口对应的id
      * <p>
      * Get the id corresponding to the last closed window
@@ -4884,11 +4906,8 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
 
     @Override
     public void setSprinting(boolean value) {
-        System.out.println("Sprinting: " + value);
-
         if (value && this.getFreezingTicks() > 0) return;
         if (isSprinting() != value) {
-            System.out.println("Setting sprinting to " + value);
             super.setSprinting(value);
             this.setMovementSpeed(value ? getMovementSpeed() * 1.3f : getMovementSpeed() / 1.3f);
         }
@@ -5498,6 +5517,17 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
 
     public void setFakeInventoryOpen(boolean fakeInventoryOpen) {
         this.fakeInventoryOpen = fakeInventoryOpen;
+    }
+
+    public Color getLocatorBarColor() {
+        return this.locatorBarColor;
+    }
+
+    public void setLocatorBarColor(Color color) {
+        this.locatorBarColor = color;
+        if (this.spawned) {
+            this.server.updatePlayerListData(this.getUniqueId(), this.getId(), this.getDisplayName(), this.getSkin(), this.getLoginChainData().getXUID(), this.getLocatorBarColor());
+        }
     }
 
     /**

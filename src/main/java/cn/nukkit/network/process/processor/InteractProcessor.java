@@ -78,7 +78,12 @@ public class InteractProcessor extends DataPacketProcessor<InteractPacket> {
                     return;
                 }
                 if (!playerHandle.getInventoryOpen()) {
+                    if(player.getTopWindow().isPresent()) return;
                     playerHandle.setInventoryOpen(player.getInventory().open(player));
+                } else {
+                    player.forceClientCloseInventory();
+                    playerHandle.setInventoryOpen(false);
+                    log.warn("{} tried to open the inventory while still being open!", player.getName());
                 }
             }
         }
