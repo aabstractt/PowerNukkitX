@@ -54,6 +54,7 @@ public class GameRules {
         gameRules.gameRules.put(SEND_COMMAND_FEEDBACK, new Value<>(Type.BOOLEAN, true));
         gameRules.gameRules.put(SHOW_COORDINATES, new Value<>(Type.BOOLEAN, false));
         gameRules.gameRules.put(SHOW_DEATH_MESSAGES, new Value<>(Type.BOOLEAN, true));
+        gameRules.gameRules.put(LOCATOR_BAR, new Value<>(Type.BOOLEAN, false));
 
         @SuppressWarnings("deprecation") GameRule deprecated = SHOW_DEATH_MESSAGE;
         gameRules.gameRules.put(deprecated, gameRules.gameRules.get(SHOW_DEATH_MESSAGES));

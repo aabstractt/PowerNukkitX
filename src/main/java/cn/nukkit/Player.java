@@ -3,6 +3,7 @@ package cn.nukkit;
 import cn.nukkit.AdventureSettings.Type;
 import cn.nukkit.api.UsedByReflection;
 import cn.nukkit.block.Block;
+import cn.nukkit.block.BlockAir;
 import cn.nukkit.block.BlockBed;
 import cn.nukkit.block.BlockID;
 import cn.nukkit.block.BlockLiquid;
@@ -2086,6 +2087,8 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
      * @param itemId the item id
      */
     public void setLastUseTick(@NotNull String itemId, int tick) {
+        if (itemId.equals(ItemID.SPLASH_POTION)) return; // Splash potion is not a valid item for last use tick
+
         lastUseItemMap.put(itemId, tick);
 
         this.setDataFlag(EntityFlag.USING_ITEM, true);
@@ -2097,7 +2100,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
     }
 
     public int getLastUseTick(String itemId) {
-        return lastUseItemMap.getOrDefault(itemId, -1);
+        return this.lastUseItemMap.getOrDefault(itemId, -1);
     }
 
     /**
@@ -4881,8 +4884,11 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
 
     @Override
     public void setSprinting(boolean value) {
+        System.out.println("Sprinting: " + value);
+
         if (value && this.getFreezingTicks() > 0) return;
         if (isSprinting() != value) {
+            System.out.println("Setting sprinting to " + value);
             super.setSprinting(value);
             this.setMovementSpeed(value ? getMovementSpeed() * 1.3f : getMovementSpeed() / 1.3f);
         }

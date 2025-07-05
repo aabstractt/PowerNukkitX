@@ -21,6 +21,7 @@ import cn.nukkit.event.player.PlayerKickEvent;
 import cn.nukkit.inventory.HumanInventory;
 import cn.nukkit.item.Item;
 import cn.nukkit.item.ItemBlock;
+import cn.nukkit.item.ProjectileItem;
 import cn.nukkit.item.enchantment.Enchantment;
 import cn.nukkit.level.GameRule;
 import cn.nukkit.level.Sound;
@@ -408,7 +409,10 @@ public class InventoryTransactionProcessor extends DataPacketProcessor<Inventory
                     }
                     if (!player.isUsingItem(item.getId())) {
                         lastUsedItem = item;
-                        player.setLastUseTick(item.getId(), player.getLevel().getTick());//set lastUsed tick
+
+                        if (!(item instanceof ProjectileItem)) {
+                            player.setLastUseTick(item.getId(), player.getLevel().getTick());//set lastUsed tick
+                        }
                         return;
                     }
 
