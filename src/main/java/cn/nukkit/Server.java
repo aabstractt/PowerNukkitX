@@ -511,8 +511,7 @@ public class Server {
         this.enablePlugins(PluginLoadOrder.POSTWORLD);
 
 
-        EntityProperty.init();
-        EntityProperty.buildPacketData();
+        EntityProperty.buildEntityProperty();
         EntityProperty.buildPlayerProperty();
 
         if (settings.miscSettings().installSpark()) {
