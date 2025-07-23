@@ -26,6 +26,10 @@ public class SetHudPacket extends DataPacket {
 
     @Override
     public void encode(HandleByteBuf byteBuf) {
+        if (this.visibility == null) {
+            throw new IllegalStateException("Visibility must be set before encoding SetHudPacket");
+        }
+
         byteBuf.writeArray(this.elements, (element) -> byteBuf.writeVarInt(element.ordinal()));
         byteBuf.writeVarInt((byte) this.visibility.ordinal());
     }

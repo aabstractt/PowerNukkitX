@@ -14,6 +14,7 @@ import cn.nukkit.entity.EntityHuman;
 import cn.nukkit.entity.EntityID;
 import cn.nukkit.entity.EntityIntelligent;
 import cn.nukkit.entity.item.EntityAreaEffectCloud;
+import cn.nukkit.entity.item.EntityFallingBlock;
 import cn.nukkit.entity.item.EntityFireworksRocket;
 import cn.nukkit.entity.item.EntityItem;
 import cn.nukkit.entity.item.EntityPainting;
@@ -1021,14 +1022,15 @@ public class Level implements Metadatable {
 
     private void debug(@NotNull String message) {
         if (this.getFolderName().equalsIgnoreCase("mainkitmap")) {
-            //System.out.println(message);
+            System.out.println(message);
         }
     }
 
     public void doTick(int currentTick) {
-        this.debug("Ticking players");
+        this.debug("Starting players tick");
+        long start = System.currentTimeMillis();
         players.values().forEach(player -> player.getSession().tick());
-        this.debug("Ticking players done");
+        this.debug("Players tick finished in " + (System.currentTimeMillis() - start) + "ms");
 
         requireProvider();
         try {
@@ -1069,7 +1071,8 @@ public class Level implements Metadatable {
                 }
             }
 
-            this.debug("Ticking queue update");
+            this.debug("Starting block update");
+            start = System.currentTimeMillis();
             while (!this.normalUpdateQueue.isEmpty()) {
                 QueuedUpdate queuedUpdate = this.normalUpdateQueue.poll();
                 Block block = getBlock(queuedUpdate.block, queuedUpdate.block.layer);
@@ -1083,12 +1086,11 @@ public class Level implements Metadatable {
                     }
                 }
             }
-            this.debug("Ticking queue update done");
+            this.debug("Block update finished in " + (System.currentTimeMillis() - start) + "ms");
 
-
+            this.debug("Starting update entities tick");
+            start = System.currentTimeMillis();
             if (!this.updateEntities.isEmpty()) {
-                this.debug("Ticking entities");
-
                 CompletableFuture.runAsync(() -> updateEntities.keySet()
                         .longParallelStream().forEach(id -> {
                             Entity entity = this.updateEntities.get(id);
@@ -1113,16 +1115,21 @@ public class Level implements Metadatable {
                         this.updateEntities.remove(id);
                     }
                 }
-
-                this.debug("Ticking entities done");
             }
-            this.debug("Ticking block entities");
-            this.updateBlockEntities.removeIf(blockEntity -> !(!blockEntity.closed && blockEntity.isValid() && blockEntity.onUpdate()));
-            this.debug("Ticking block entities done");
+            this.debug("Update entities tick finished in " + (System.currentTimeMillis() - start) + "ms");
 
-            this.debug("Ticking chunk");
+            this.debug("Starting update block entities tick");
+            start = System.currentTimeMillis();
+            this.updateBlockEntities.removeIf(blockEntity -> !(!blockEntity.closed && blockEntity.isValid() && blockEntity.onUpdate()));
+            this.debug("Update block entities tick finished in " + (System.currentTimeMillis() - start) + "ms");
+
+            this.debug("Starting update chunks tick");
+            start = System.currentTimeMillis();
             this.tickChunks();
-            this.debug("Ticking chunk done");
+            this.debug("Update chunks tick finished in " + (System.currentTimeMillis() - start) + "ms");
+
+            this.debug("Starting update changed blocks tick");
+            start = System.currentTimeMillis();
             synchronized (changedBlocks) {
                 if (!this.changedBlocks.isEmpty()) {
                     if (!this.players.isEmpty()) {
@@ -1160,10 +1167,13 @@ public class Level implements Metadatable {
                     this.changedBlocks.clear();
                 }
             }
+            this.debug("Update changed blocks tick finished in " + (System.currentTimeMillis() - start) + "ms");
             if (this.sleepTicks > 0 && --this.sleepTicks <= 0) {
                 this.checkSleep();
             }
 
+            this.debug("Starting chunk packets tick");
+            start = System.currentTimeMillis();
             for (long index : this.chunkPackets.keySet()) {
                 int chunkX = Level.getHashX(index);
                 int chunkZ = Level.getHashZ(index);
@@ -1175,6 +1185,7 @@ public class Level implements Metadatable {
                 }
             }
             this.chunkPackets.clear();
+            this.debug("Chunk packets tick finished in " + (System.currentTimeMillis() - start) + "ms");
 
             if (gameRules.isStale()) {
                 GameRulesChangedPacket packet = new GameRulesChangedPacket();
@@ -1185,11 +1196,15 @@ public class Level implements Metadatable {
         } catch (Exception e) {
             e.printStackTrace(System.err);
         } finally {
-            this.debug("Do check network");
+            this.debug("Starting players network tick");
+            start = System.currentTimeMillis();
             getPlayers().values().forEach(Player::checkNetwork);
-            this.debug("Do check network done");
+            this.debug("Players network tick finished in " + (System.currentTimeMillis() - start) + "ms");
 
+            this.debug("Releasing tick cached blocks");
+            start = System.currentTimeMillis();
             releaseTickCachedBlocks();
+            this.debug("Tick cached blocks released in " + (System.currentTimeMillis() - start) + "ms");
         }
     }
 
@@ -2783,7 +2798,7 @@ public class Level implements Metadatable {
 
         boolean isPlayerInput = data.triggerType == UseItemData.TriggerType.PLAYER_INPUT;
 
-        if (player != null && isPlayerInput) {
+        if (player != null) {
             PlayerInteractEvent ev = new PlayerInteractEvent(player, item, target, face, target.isAir() ? Action.RIGHT_CLICK_AIR : Action.RIGHT_CLICK_BLOCK);
             //                                handle spawn protect
             if (player.getGamemode() > 2 || (!player.isOp() && isInSpawnRadius(target))) {
@@ -2812,6 +2827,7 @@ public class Level implements Metadatable {
                 if ((item instanceof ItemBucket itemBucket) && itemBucket.isWater()) {
                     player.getLevel().sendBlocks(new Player[]{player}, new Block[]{Block.get(BlockID.AIR, target)}, UpdateBlockPacket.FLAG_ALL_PRIORITY, 1);
                 }
+
                 return null;
             }
         } else if (!target.isAir() && target.canBeActivated() && target.onActivate(item, null, face, fx, fy, fz)) {
@@ -3551,7 +3567,7 @@ public class Level implements Metadatable {
                             LevelChunkPacket pk = new LevelChunkPacket();
                             pk.chunkX = x;
                             pk.chunkZ = z;
-                            pk.dimension = getDimensionData().getDimensionId();
+                            pk.dimension = DIMENSION_OVERWORLD;
                             pk.subChunkCount = pair.right();
                             pk.data = pair.left();
                             player.sendChunk(x, z, pk);
@@ -3648,9 +3664,9 @@ public class Level implements Metadatable {
             return true;
         }
         Map<Integer, ChunkLoader> integerChunkLoaderMap = this.chunkLoaders.get(hash);
-        if (integerChunkLoaderMap != null) {
-            return this.chunkLoaders.containsKey(hash) && !integerChunkLoaderMap.isEmpty();
-        } else return false;
+        if (integerChunkLoaderMap == null) return false;
+
+        return this.chunkLoaders.containsKey(hash) && !integerChunkLoaderMap.isEmpty();
     }
 
     public IChunk getChunk(int chunkX, int chunkZ) {

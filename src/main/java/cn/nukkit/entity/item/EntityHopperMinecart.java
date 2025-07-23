@@ -43,47 +43,6 @@ public class EntityHopperMinecart extends EntityMinecartAbstract implements Inve
         setDisplayBlock(Block.get(Block.HOPPER), false);
     }
 
-    @Override
-    public boolean onUpdate(int currentTick) {
-        if (!super.onUpdate(currentTick)) return false;
-
-        if (isOnTransferCooldown()) {
-            this.transferCooldown--;
-            return true;
-        }
-
-        checkDisabled();
-
-        if (isDisabled()) {
-            return false;
-        }
-
-        HopperSearchItemEvent event = new HopperSearchItemEvent(this, true);
-        this.server.getPluginManager().callEvent(event);
-        if (event.isCancelled()) return false;
-
-        this.updatePickupArea();
-
-        Block blockSide = this.getSide(BlockFace.UP).getTickCachedLevelBlock();
-        BlockEntity blockEntity = this.level.getBlockEntity(temporalVector.setComponentsAdding(this, BlockFace.UP));
-
-        boolean changed;
-
-        if (blockEntity instanceof InventoryHolder || blockSide instanceof BlockComposter) {
-            //从容器中拉取物品
-            changed = pullItems(this, this);
-        } else {
-            //收集掉落物
-            changed = pickupItems(this, this, pickupArea);
-        }
-
-        if (changed) {
-            this.setTransferCooldown(1);
-        }
-
-        return true;
-    }
-
     public boolean isOnTransferCooldown() {
         return this.transferCooldown > 0;
     }

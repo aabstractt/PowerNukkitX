@@ -219,18 +219,6 @@ public abstract class EntityMinecartAbstract extends EntityVehicle {
                 }
             }
 
-            //使矿车通知漏斗更新而不是漏斗来检测矿车
-            //通常情况下，矿车的数量远远少于漏斗，所以说此举能大福提高性能
-            if (this instanceof InventoryHolder holder) {
-                var pickupArea = new SimpleAxisAlignedBB(this.x, this.y - 1, this.z, this.x + 1, this.y, this.z + 1);
-                checkPickupHopper(pickupArea, holder);
-                //漏斗矿车会自行拉取物品!
-                if (!(this instanceof EntityHopperMinecart)) {
-                    var pushArea = new SimpleAxisAlignedBB(this.x, this.y, this.z, this.x + 1, this.y + 2, this.z + 1);
-                    checkPushHopper(pushArea, holder);
-                }
-            }
-
             // No need to onGround or Motion diff! This always have an update
             return true;
         }

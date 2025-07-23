@@ -4,6 +4,7 @@ import cn.nukkit.AdventureSettings.Type;
 import cn.nukkit.api.UnintendedClientBehaviour;
 import cn.nukkit.api.UsedByReflection;
 import cn.nukkit.block.Block;
+import cn.nukkit.block.BlockAir;
 import cn.nukkit.block.BlockBed;
 import cn.nukkit.block.BlockID;
 import cn.nukkit.block.BlockLiquid;

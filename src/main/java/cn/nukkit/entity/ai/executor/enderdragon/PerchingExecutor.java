@@ -33,7 +33,7 @@ public class PerchingExecutor implements EntityControl, IBehaviorExecutor {
             throw new NullPointerException("stayNearby is null");
         }
 
-        Vector3 target = new Vector3(0, entity.getLevel().getHighestBlockAt(nearby.getFloorX(), nearby.getFloorZ()) + 1, 0);
+        Vector3 target = new Vector3(nearby.getFloorX(), entity.getLevel().getHighestBlockAt(nearby.getFloorX(), nearby.getFloorZ()) + 1, nearby.getFloorX());
         if (entity.distance(target) <= 10) {
             if (this.stayTick == -1) this.stayTick = 0;
             if (this.stayTick == 25) {
