@@ -56,6 +56,11 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
     }
 
     @Override
+    protected double getStepHeight() {
+        return 0.5;
+    }
+
+    @Override
     protected void initEntity() {
         super.initEntity();
 
