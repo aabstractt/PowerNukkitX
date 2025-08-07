@@ -27,6 +27,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 public class FakeInventory extends BaseInventory implements InputInventory {
     private final Map<Integer, ItemHandler> handlers = new HashMap<>();
@@ -34,6 +35,7 @@ public class FakeInventory extends BaseInventory implements InputInventory {
     private final FakeInventoryType fakeInventoryType;
     private String title;
     private ItemHandler defaultItemHandler;
+    private Consumer<Player> onCloseHandler;
 
     public FakeInventory(FakeInventoryType fakeInventoryType) {
         this(fakeInventoryType, fakeInventoryType.name());
@@ -133,6 +135,10 @@ public class FakeInventory extends BaseInventory implements InputInventory {
         }, 5);
         super.onClose(player);
         player.setFakeInventoryOpen(false);
+
+        if (this.onCloseHandler != null) {
+            this.onCloseHandler.accept(player);
+        }
     }
 
     public String getTitle() {
@@ -149,6 +155,10 @@ public class FakeInventory extends BaseInventory implements InputInventory {
 
     public void setDefaultItemHandler(ItemHandler defaultItemHandler) {
         this.defaultItemHandler = defaultItemHandler;
+    }
+
+    public void setOnCloseHandler(Consumer<Player> onCloseHandler) {
+        this.onCloseHandler = onCloseHandler;
     }
 
     @ApiStatus.Internal

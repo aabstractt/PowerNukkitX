@@ -3,6 +3,7 @@ package cn.nukkit.block;
 import cn.nukkit.Player;
 import cn.nukkit.block.customblock.CustomBlock;
 import cn.nukkit.block.customblock.CustomBlockDefinition;
+import cn.nukkit.block.customblock.CustomBlockDefinition.BlockTickSettings;
 import cn.nukkit.block.property.type.BlockPropertyType;
 import cn.nukkit.blockentity.BlockEntity;
 import cn.nukkit.entity.Entity;
@@ -35,9 +36,10 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Predicate;
 
 /**
@@ -227,8 +229,44 @@ public abstract class Block extends Position implements Metadatable, AxisAligned
         return false;
     }
 
+    /**
+     * Handles ticking logic for custom blocks using either RANDOM or SCHEDULED tick types.
+     * 
+     * To enable ticking, configure the block with:
+     * <pre>{@code
+     *     .blockTick(60, 60, true)
+     * }</pre>
+     * Where:
+     * <ul>
+     *   <li><b>minTicks</b> and <b>maxTicks</b>: define the tick interval range (in server ticks).</li>
+     *   <li><b>looping</b>: if {@code true}, the block will continue ticking; if {@code false}, it will tick once and stop.</li>
+     * </ul>
+     *
+     * <b>Important:</b> Always call {@code super.onUpdate(type)} in any overridden implementation to preserve base behavior.
+     *
+     * <b>Note:</b> For custom blocks, ticking logic should only be applied to {@code BLOCK_UPDATE_SCHEDULED} updates.
+     * Return early for all other tick types (like {@code BLOCK_UPDATE_RANDOM}) to avoid interfering with the core scheduling system.
+     *
+     * @return The update type to continue ticking, or 0 to stop future ticks.
+     */
     public int onUpdate(int type) {
-        return 0;
+        if (type != Level.BLOCK_UPDATE_SCHEDULED) return 0;
+
+        CustomBlockDefinition def = getCustomDefinition();
+        if (def == null || def.tickSettings() == null) return 0;
+
+        BlockTickSettings tick = def.tickSettings();
+        int min = tick.minTicks();
+        int max = tick.maxTicks();
+
+        if (tick.looping() && this.getLevel().isChunkLoaded(this.getFloorX() >> 4, this.getFloorZ() >> 4)) {
+            int delay = (min == max) ? max : ThreadLocalRandom.current().nextInt(min, max + 1);
+            this.getLevel().scheduleUpdate(this, delay);
+            return Level.BLOCK_UPDATE_SCHEDULED;
+        } else {
+            this.getLevel().cancelScheduledUpdate(this, this);
+            return 0;
+        }
     }
 
     public void onTouch(@NotNull Vector3 vector, @NotNull Item item, @NotNull BlockFace face, float fx, float fy, float fz, @Nullable Player player, @NotNull PlayerInteractEvent.Action action) {
@@ -381,7 +419,11 @@ public abstract class Block extends Position implements Metadatable, AxisAligned
     public boolean hasFreeSpaceAbove() {
         Block above = this.up();
 
-        if (above.isAir()) {
+        if (above instanceof BlockSlab slab) {
+            return slab.isOnTop();
+        }
+
+        if (above.isTransparent()) {
             return true;
         }
 
@@ -389,9 +431,7 @@ public abstract class Block extends Position implements Metadatable, AxisAligned
         if (box != null) {
             double minY = box.getMinY();
             double relativeMinY = minY - above.getY();
-            boolean allowed = relativeMinY >= 0.5;
-
-            return allowed;
+            return relativeMinY >= 0.5;
         }
 
         return false;
@@ -423,9 +463,6 @@ public abstract class Block extends Position implements Metadatable, AxisAligned
     /**
      * Check if blocks can be attached in the given side.
      */
-    //public boolean isSolid(BlockFace side) {
-    //    return isSideFull(side);
-    //}
     public boolean isSolid(BlockFace side) {
         CustomBlockDefinition def = getCustomDefinition();
         if (def != null) {
@@ -440,7 +477,6 @@ public abstract class Block extends Position implements Metadatable, AxisAligned
                         double base = box.getMinY();
                         return base <= 0.001;
                     }
-                    // You can extend to X and Z sides too if needed.
                     default -> {
                         return true;
                     }
@@ -448,7 +484,7 @@ public abstract class Block extends Position implements Metadatable, AxisAligned
             }
         }
 
-    return isSideFull(side); // fallback to default solid-side check
+    return isSideFull(side);
     }
 
     // https://minecraft.wiki/w/Opacity#Lighting
@@ -460,20 +496,65 @@ public abstract class Block extends Position implements Metadatable, AxisAligned
         return false;
     }
 
+    /**
+     * Returns the level of waterlogging for this block.
+     * 0 means the block is not waterlogged; a value greater than 0 indicates the degree of waterlogging.
+     *
+     * @return the waterlogging level (0 if not waterlogged)
+     */
     public int getWaterloggingLevel() {
         return 0;
+    }
+
+    /**
+     * Checks if this block is waterlogged.
+     * Returns {@code true} if the waterlogging level is greater than 0, otherwise {@code false}.
+     *
+     * @return {@code true} if waterlogged, {@code false} otherwise
+     */
+    public boolean isWaterLogged() {
+        if (getWaterloggingLevel() == 0) return false;
+
+        Block fluid = this.getLevelBlockAtLayer(1);
+        return fluid instanceof BlockWater && !fluid.isAir();
     }
 
     public final boolean canWaterloggingFlowInto() {
         return canBeFlowedInto() || getWaterloggingLevel() > 1;
     }
 
+    /**
+     * Returns true if this block is interactable (can be activated).
+     * <p>
+     * For custom blocks, set interactability using the builder (isPlayerInteractable)
+     * instead of overriding this method, so it is correctly saved in NBT and synced with client.
+     */
     public boolean canBeActivated() {
+        CustomBlockDefinition def = getCustomDefinition();
+        if (def != null) {
+            CompoundTag components = def.getComponents();
+            if (components != null && components.contains("minecraft:custom_components")) {
+                CompoundTag custom = components.getCompound("minecraft:custom_components");
+                if (custom.contains("hasPlayerInteract")) {
+                    return custom.getByte("hasPlayerInteract") != 0;
+                }
+            }
+        }
         return false;
     }
 
     public boolean hasEntityCollision() {
         return false;
+    }
+
+    /**
+     * Returns true if this block has step-on/off sensor.
+     * <p>
+     * For custom blocks, can be set this by using the builder (isStepSensor).
+     */
+    public boolean hasEntityStepSensor() {
+        CustomBlockDefinition def = getCustomDefinition();
+        return def != null && def.isStepSensor();
     }
 
     public boolean canPassThrough() {
@@ -581,7 +662,22 @@ public abstract class Block extends Position implements Metadatable, AxisAligned
     }
 
     public List<BlockPropertyType.BlockPropertyValue<?, ?, ?>> getPropertyValues() {
-        return this.blockstate.getBlockPropertyValues();
+        try {
+            return this.blockstate.getBlockPropertyValues();
+        } catch (IllegalArgumentException | NullPointerException e) {
+            log.warn("The block does not have this property.");
+            return Collections.emptyList();
+        }
+    }
+
+    @Nullable
+    public Object getPropertyValue(String name) {
+        for (BlockPropertyType.BlockPropertyValue<?, ?, ?> prop : this.getPropertyValues()) {
+            if (prop.getPropertyType().getName().equals(name)) {
+                return prop.getValue();
+            }
+        }
+        return null;
     }
 
     public boolean isAir() {
@@ -592,8 +688,46 @@ public abstract class Block extends Position implements Metadatable, AxisAligned
         return blockstate;
     }
 
+    /**
+     * @deprecated Use {@link #hasTag(String)} instead.
+     */
+    @Deprecated
     public boolean is(final String blockTag) {
         return BlockTags.getTagSet(this.getId()).contains(blockTag);
+    }
+
+    /**
+     * @return if block has a string tag
+     */
+    public boolean hasTag(final String blockTag) {
+        CustomBlockDefinition def = getCustomDefinition();
+        if (def != null) {
+            CompoundTag nbt = def.nbt();
+            if (nbt.contains("blockTags")) {
+                ListTag<StringTag> tagList = nbt.getList("blockTags", StringTag.class);
+                return tagList.getAll().contains(new StringTag(blockTag));
+            }
+        }
+
+        return BlockTags.getTagSet(this.getId()).contains(blockTag);
+    }
+
+    /**
+     * @return list of tags for the block
+     */
+    public String[] getTags() {
+        CustomBlockDefinition def = getCustomDefinition();
+        if (def != null) {
+            CompoundTag nbt = def.nbt();
+            if (nbt.contains("blockTags")) {
+                ListTag<StringTag> tagList = nbt.getList("blockTags", StringTag.class);
+                return tagList.getAll().stream()
+                    .map(tag -> tag.data)
+                    .toArray(String[]::new);
+            }
+        }
+
+        return BlockTags.getTagSet(this.getId()).toArray(new String[0]);
     }
 
     public <DATATYPE, PROPERTY extends BlockPropertyType<DATATYPE>> DATATYPE getPropertyValue(PROPERTY p) {
@@ -1033,6 +1167,20 @@ public abstract class Block extends Position implements Metadatable, AxisAligned
     }
 
     public void onEntityCollide(Entity entity) {
+    }
+
+    /**
+     * Called when an entity steps onto this block.<p>
+     * Only triggered if isStepSensor() returns true on the builder.
+     */
+    public void onEntityStepOn(Entity entity) {
+    }
+
+    /**
+     * Called when an entity steps off this block.<p>
+     * Only triggered if isStepSensor() returns true on the builder.
+     */
+    public void onEntityStepOff(Entity entity) {
     }
 
     public void onEntityFallOn(Entity entity, float fallDistance) {

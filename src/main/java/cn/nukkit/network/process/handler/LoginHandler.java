@@ -83,18 +83,27 @@ public class LoginHandler extends BedrockSessionPacketHandler {
             Server.getInstance().getNetwork().replaceSessionAddress(oldAddress, session.getAddress(), session);
         }
 
+        //The client won't send this data when it isn't logged in.
+        if(server.getSettings().baseSettings().xboxAuth()) {
+            //Verify if the titleId match with DeviceOs
+
+            /*int predictedDeviceOS = getPredictedDeviceOS(chainData);
+            if(predictedDeviceOS != chainData.getDeviceOS()) {
+                session.close("§cPacket handling error: deviceOS check failed");
+                return;
+            } */ //Temporary removed because of microsoft.
+        }
+
         //Verify if the language is valid
         if(!isValidLanguage(chainData.getLanguageCode())) {
-            log.warn("Player {} tried to login with an invalid language: {}", pk.username, chainData.getLanguageCode());
-            session.close(TextFormat.RED + "Unexpected Language");
-
+            session.close("§cPacket handling error: lang check failed");
             return;
         }
 
         //Verify if the GameVersion has valid format
         if(chainData.getGameVersion().split("\\.").length != 3 && !Server.getInstance().getSettings().gameplaySettings().allowBeta()) {
             log.warn("Player {} tried to login with an invalid game version: {}", pk.username, chainData.getGameVersion());
-            session.close(TextFormat.RED + "Unexpected GameVersion");
+            session.close("§cPacket handling error: no beta allowed");
             return;
         }
 
@@ -105,8 +114,7 @@ public class LoginHandler extends BedrockSessionPacketHandler {
                 CurrentInputMode >= InputMode.COUNT.getOrdinal()
         ) {
             log.warn("Player {} tried to login with an invalid input mode: {}", pk.username, CurrentInputMode);
-            log.debug("disconnection due to invalid input mode");
-            session.close(TextFormat.RED + "Unexpected InputMode");
+            session.close("§cPacket handling error: invalid input mode");
             return;
         }
 
@@ -117,8 +125,7 @@ public class LoginHandler extends BedrockSessionPacketHandler {
                 DefaultInputMode >= InputMode.COUNT.getOrdinal()
         ) {
             log.warn("Player {} tried to login with an invalid default input mode: {}", pk.username, DefaultInputMode);
-            log.debug("disconnection due to invalid input mode");
-            session.close(TextFormat.RED + "Unexpected DefaultInputMode");
+            session.close("§cPacket handling error: invalid input mode");
             return;
         }
 

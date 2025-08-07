@@ -7,6 +7,7 @@ import cn.nukkit.api.NonComputationAtomic;
 import cn.nukkit.block.*;
 import cn.nukkit.block.customblock.CustomBlock;
 import cn.nukkit.block.customblock.CustomBlockDefinition;
+import cn.nukkit.block.customblock.CustomBlockDefinition.BlockTickSettings;
 import cn.nukkit.block.property.CommonBlockProperties;
 import cn.nukkit.blockentity.BlockEntity;
 import cn.nukkit.entity.Entity;
@@ -38,6 +39,7 @@ import cn.nukkit.event.weather.LightningStrikeEvent;
 import cn.nukkit.inventory.BlockInventoryHolder;
 import cn.nukkit.item.Item;
 import cn.nukkit.item.ItemBucket;
+import cn.nukkit.item.customitem.ItemCustom;
 import cn.nukkit.item.enchantment.Enchantment;
 import cn.nukkit.level.format.ChunkSection;
 import cn.nukkit.level.format.ChunkState;
@@ -1077,13 +1079,20 @@ public class Level implements Metadatable {
             while (!this.normalUpdateQueue.isEmpty()) {
                 QueuedUpdate queuedUpdate = this.normalUpdateQueue.poll();
                 Block block = getBlock(queuedUpdate.block, queuedUpdate.block.layer);
-                BlockUpdateEvent event = new BlockUpdateEvent(block);
-                this.server.getPluginManager().callEvent(event);
+                int chunkX = block.getFloorX() >> 4;
+                int chunkZ = block.getFloorZ() >> 4;
+                long hash = chunkHash(chunkX, chunkZ);
 
-                if (!event.isCancelled()) {
-                    block.onUpdate(BLOCK_UPDATE_NORMAL);
-                    if (queuedUpdate.neighbor != null) {
-                        block.onNeighborChange(queuedUpdate.neighbor.getOpposite());
+                // Only tick if the chunk is in use, helps to keep block ticks in sync when reload chunk
+                if (isChunkInUse(hash)) {
+                    BlockUpdateEvent event = new BlockUpdateEvent(block);
+                    this.server.getPluginManager().callEvent(event);
+
+                    if (!event.isCancelled()) {
+                        block.onUpdate(BLOCK_UPDATE_NORMAL);
+                        if (queuedUpdate.neighbor != null) {
+                            block.onNeighborChange(queuedUpdate.neighbor.getOpposite());
+                        }
                     }
                 }
             }
@@ -1695,14 +1704,22 @@ public class Level implements Metadatable {
             return;
         }
 
-        BlockUpdateEntry entry = new BlockUpdateEntry(pos.floor(), block, delay + getCurrentTick(), priority, checkBlockWhenUpdate);
+        long tick = delay + getCurrentTick();
+        BlockUpdateEntry entry = new BlockUpdateEntry(pos.floor(), block, tick, priority, checkBlockWhenUpdate);
 
-        if (!this.updateQueue.contains(entry)) {
-            this.updateQueue.add(entry);
+        boolean isRedstoneDiode = block instanceof BlockRedstoneDiode;
+        if (isRedstoneDiode) {
+            if (!this.isConcurrentSchedule(pos.floor(), block, tick, delay) && !this.isBlockTickPending(pos.floor(), block)) {
+                this.updateQueue.add(entry);
+            }
+        } else {
+            if (!this.updateQueue.contains(entry)) {
+                this.updateQueue.add(entry);
+            }
         }
     }
 
-    public boolean cancelSheduledUpdate(Vector3 pos, Block block) {
+    public boolean cancelScheduledUpdate(Vector3 pos, Block block) {
         return this.updateQueue.remove(new BlockUpdateEntry(pos, block));
     }
 
@@ -1710,8 +1727,16 @@ public class Level implements Metadatable {
         return this.updateQueue.contains(new BlockUpdateEntry(pos, block));
     }
 
+    public boolean isConcurrentSchedule(Vector3 pos, Block block, long targetTick, int delay) {
+        return this.updateQueue.isConcurrentSchedule(pos, block, targetTick, delay);
+    }
+
     public boolean isBlockTickPending(Vector3 pos, Block block) {
         return this.updateQueue.isBlockTickPending(pos, block);
+    }
+
+    public BlockUpdateScheduler getBlockUpdateScheduler() {
+        return this.updateQueue;
     }
 
     public Set<BlockUpdateEntry> getPendingBlockUpdates(IChunk chunk) {
@@ -2151,14 +2176,20 @@ public class Level implements Metadatable {
         this.addBlockLightUpdate((int) pos.x, (int) pos.y, (int) pos.z);
     }
 
+    /**
+     * Updates skylight for the entire vertical column at (x, z) by scanning from world top down,
+     * setting values according to block transparency and attenuation, stopping at the first solid block.
+     */
     public void updateBlockSkyLight(int x, int y, int z) {
         IChunk chunk = getChunkIfLoaded(x >> 4, z >> 4);
 
         if (chunk == null) return;
 
-        int height = chunk.recalculateHeightMapColumn(x & 0x0f, z & 0x0f);
+        int minY = getDimensionData().getMinHeight();
+        int maxY = getDimensionData().getMaxHeight();
         int level = 15;
-        for(int _y = height ; _y >= getDimensionData().getMinHeight(); _y--) {
+
+        for (int _y = maxY; _y >= minY; _y--) {
             Block block = getBlock(x, _y, z);
             if (!block.isTransparent()) {
                 level = 0;
@@ -2167,7 +2198,7 @@ public class Level implements Metadatable {
             } else {
                 level -= block.getLightLevel();
             }
-            if(level <= 0) level = 0;
+            if (level <= 0) level = 0;
             //if(_y != height && !block.canPassThrough() && block.up().canPassThrough()) addSkyLightUpdate(x, _y+1, z); ToDo: Light Spread
             setBlockSkyLightAt(x, _y, z, level);
         }
@@ -2434,6 +2465,22 @@ public class Level implements Metadatable {
         }
 
         blockPrevious.afterRemoval(block, update);
+
+        if (block instanceof CustomBlock customBlock) {
+            CustomBlockDefinition def = customBlock.getDefinition();
+            if (def != null && def.tickSettings() != null) {
+                BlockTickSettings tick = def.tickSettings();
+                int min = tick.minTicks();
+                int max = tick.maxTicks();
+
+                if (min <= max) {
+                    int delay = (min == max) ? max : ThreadLocalRandom.current().nextInt(min, max + 1);
+                    block.getLevel().scheduleUpdate(block, delay);
+                } else {
+                    log.error("Invalid tick range for block '{}': min {} > max {}", block.getId(), min, max);
+                }
+            }
+        }
         return true;
     }
 
@@ -2840,45 +2887,56 @@ public class Level implements Metadatable {
             }
             return item;
         }
-
-        return placeBlock(item, face, fx, fy, fz, player, playSound, block, target);
+        if (data.clientInteractPrediction == UseItemData.PredictedResult.SUCCESS) {
+            return placeBlock(item, face, fx, fy, fz, player, playSound, block, target);
+        }
+        return item;
     }
 
-    private Block beforePlaceBlock(Item item, BlockFace face, float fx, float fy, float fz, Player player, boolean playSound, Block block, Block target) {
+    private Block beforePlaceBlock(Item item, BlockFace face, Block block, Block target) {
         Block hand;
+
         if (item.canBePlaced()) {
             hand = item.getBlock();
+            hand.position(block);
+        } else if (item instanceof ItemCustom customItem) {
+            Block blockToPlace = customItem.getBlockPlacerTargetBlock();
+            if (blockToPlace == null || blockToPlace.isAir()) return null;
+            hand = blockToPlace;
             hand.position(block);
         } else {
             return null;
         }
-        if (
-                !(block.canBeReplaced() ||
-                        (hand instanceof BlockSlab && hand.getId().equals(block.getId())) ||
-                        hand instanceof BlockCandle//Special for candles
-                )
-        ) {
+
+        // Check for valid placement conditions
+        if (!(block.canBeReplaced() ||
+            (hand instanceof BlockSlab && hand.getId().equals(block.getId())) ||
+            hand instanceof BlockCandle)) {
             return null;
         }
 
-        //处理放置梯子,我们应该提前给hand设置方向,这样后面计算是否碰撞实体才准确
+        // To place the ladder, we should set the direction of the hand in advance so that the calculation of whether it
+        // collides with the entity can be accurate.
         if (hand instanceof BlockLadder) {
             if (target instanceof BlockLadder) {
                 hand.setPropertyValue(CommonBlockProperties.FACING_DIRECTION, face.getOpposite().getIndex());
-            } else hand.setPropertyValue(CommonBlockProperties.FACING_DIRECTION, face.getIndex());
+            } else {
+                hand.setPropertyValue(CommonBlockProperties.FACING_DIRECTION, face.getIndex());
+            }
         }
 
-        //cause bug (eg: frog_spawn) (and I don't know what this is for)
+        // cause bug (eg: frog_spawn) (and I don't know what this is for)
         if (!(hand instanceof BlockFrogSpawn) && target.canBeReplaced()) {
             block = target;
             hand.position(block);
         }
+
         return hand;
     }
 
     @Nullable
     private Item placeBlock(Item item, BlockFace face, float fx, float fy, float fz, Player player, boolean playSound, Block block, Block target) {
-        final Block hand = beforePlaceBlock(item, face, fx, fy, fz, player, playSound, block, target);
+        final Block hand = beforePlaceBlock(item, face, block, target);
         if (hand == null) return null;
         if (!hand.canPassThrough() && hand.getBoundingBox() != null) {
             int realCount = 0;
@@ -2890,15 +2948,6 @@ public class Level implements Metadatable {
                     continue;
                 }
                 ++realCount;
-            }
-            if (player != null) {
-                var diff = player.getNextPosition().subtract(player.getPosition());
-                var aabb = player.getBoundingBox().getOffsetBoundingBox(diff.x, diff.y, diff.z);
-                if (aabb.intersectsWith(hand.getBoundingBox())) {
-                    if(aabb.intersection(hand.getBoundingBox()).getVolume() > 0.005f) {
-                        ++realCount;
-                    }
-                }
             }
             if (realCount > 0) {
                 // Entity in block

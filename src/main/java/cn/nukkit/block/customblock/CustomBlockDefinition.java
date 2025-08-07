@@ -45,7 +45,7 @@ import java.util.function.Consumer;
  * For further customization of runtime behavior, you can still override methods in {@link Block Block}.
  */
 @Slf4j
-public record CustomBlockDefinition(String identifier, CompoundTag nbt) {
+public record CustomBlockDefinition(String identifier, CompoundTag nbt, @Nullable BlockTickSettings tickSettings, boolean isStepSensor) {
     private static final Object2IntOpenHashMap<String> INTERNAL_ALLOCATION_ID_MAP = new Object2IntOpenHashMap<>();
     private static final AtomicInteger CUSTOM_BLOCK_RUNTIMEID = new AtomicInteger(10000);
 
@@ -70,6 +70,8 @@ public record CustomBlockDefinition(String identifier, CompoundTag nbt) {
     public static class Builder {
         protected final String identifier;
         protected final CustomBlock customBlock;
+        private BlockTickSettings tickSettings = null;
+        private boolean isStepSensor = false;
 
         protected CompoundTag nbt = new CompoundTag()
                 .putCompound("components", new CompoundTag());
@@ -436,6 +438,54 @@ public record CustomBlockDefinition(String identifier, CompoundTag nbt) {
             return this;
         }
 
+        public Builder isPlayerInteractable(boolean value) {
+            if (!this.nbt.getCompound("components").contains("minecraft:custom_components")) {
+                this.nbt.getCompound("components")
+                    .putCompound("minecraft:custom_components", createDefaultCustomComponents());
+            }
+            this.nbt.getCompound("components")
+                .getCompound("minecraft:custom_components")
+                .putByte("hasPlayerInteract", (byte) (value ? 1 : 0));
+            return this;
+        }
+
+        public Builder hasPlayerPlacingSensor(boolean value) {
+            if (!this.nbt.getCompound("components").contains("minecraft:custom_components")) {
+                this.nbt.getCompound("components")
+                    .putCompound("minecraft:custom_components", createDefaultCustomComponents());
+            }
+            this.nbt.getCompound("components")
+                .getCompound("minecraft:custom_components")
+                .putByte("hasPlayerPlacing", (byte) (value ? 1 : 0));
+            return this;
+        }
+
+        /**
+         * Defines how this custom block should tick over time.
+         *
+         * @param minTicks The minimum number of ticks before the block updates.
+         * @param maxTicks The maximum number of ticks before the block updates. Must be ≥ {@code minTicks}.
+         * @param looping  If {@code true}, the block will continue ticking; if {@code false}, it will tick only once.
+         * @return This builder instance for chaining.
+         *
+         * Example: {@code .blockTick(60, 60, true)} will schedule the block to tick every 3 seconds.
+         */
+        public Builder blockTick(int minTicks, int maxTicks, boolean looping) {
+            Preconditions.checkArgument(minTicks >= 0 && maxTicks >= minTicks, "Invalid tick interval range");
+            this.tickSettings = new BlockTickSettings(minTicks, maxTicks, looping);
+            return this;
+        }
+
+        /**
+         * Enables step sensor logic (entity step-on/off).
+         * <p>
+         * When enabled, override {@link #onEntityStepOn(Entity)} and {@link #onEntityStepOff(Entity)} for custom handling.
+         */
+        public Builder isStepSensor(boolean value) {
+            this.isStepSensor = value;
+            return this;
+        }
+
         /**
          * @return Block Properties in NBT Tag format
          */
@@ -483,7 +533,7 @@ public record CustomBlockDefinition(String identifier, CompoundTag nbt) {
         }
 
         public CustomBlockDefinition build() {
-            return new CustomBlockDefinition(this.identifier, this.nbt);
+            return new CustomBlockDefinition(this.identifier, this.nbt, this.tickSettings, this.isStepSensor);
         }
     }
 
@@ -553,6 +603,14 @@ public record CustomBlockDefinition(String identifier, CompoundTag nbt) {
         return components;
     }
 
+    // Creates default custom_components
+    public static CompoundTag createDefaultCustomComponents() {
+        return new CompoundTag(new LinkedHashMap<>())
+            .putByte("hasPlayerInteract", (byte) 0)
+            .putByte("hasPlayerPlacing", (byte) 0)
+            .putByte("isV1Component", (byte) 1);
+    }
+
     public CompoundTag getComponents() {
         return this.nbt.getCompound("components");
     }
@@ -563,5 +621,8 @@ public record CustomBlockDefinition(String identifier, CompoundTag nbt) {
 
     public @Nullable AxisAlignedBB getBoundingBox(Block block) {
         return CustomBlockUtils.getBoundingBox(this, block);
+    }
+
+    public record BlockTickSettings(int minTicks, int maxTicks, boolean looping) {
     }
 }
