@@ -1085,6 +1085,7 @@ public abstract class Entity extends Location implements Metadatable, EntityID, 
         for (int i = 0; i < addEntity.links.length; i++) {
             addEntity.links[i] = new EntityLink(this.getId(), this.passengers.get(i).getId(), i == 0 ? EntityLink.Type.RIDER : EntityLink.Type.PASSENGER, false, false);
         }
+        addEntity.syncedProperties = this.getClientSyncProperties();
 
         return addEntity;
     }
@@ -3054,16 +3055,13 @@ public abstract class Entity extends Location implements Metadatable, EntityID, 
         return server;
     }
 
-
     public boolean isUndead() {
         return false;
     }
 
-
     public boolean isInEndPortal() {
         return inEndPortal;
     }
-
 
     public boolean isPreventingSleep(Player player) {
         return false;
@@ -3088,26 +3086,21 @@ public abstract class Entity extends Location implements Metadatable, EntityID, 
         return hash;
     }
 
-
     public boolean isSpinAttacking() {
         return this.getDataFlag(EntityFlag.DAMAGE_NEARBY_MOBS);
     }
-
 
     public void setSpinAttacking(boolean value) {
         this.setDataFlag(EntityFlag.DAMAGE_NEARBY_MOBS, value);
     }
 
-
     public void setSpinAttacking() {
         this.setSpinAttacking(true);
     }
 
-
     public boolean isNoClip() {
         return noClip;
     }
-
 
     public void setNoClip(boolean noClip) {
         this.noClip = noClip;
@@ -3118,32 +3111,47 @@ public abstract class Entity extends Location implements Metadatable, EntityID, 
         return this instanceof EntityBoss;
     }
 
+    /**
+     * Add a tag to the entity
+     */
     public void addTag(String tag) {
         this.namedTag.putList("Tags", this.namedTag.getList("Tags", StringTag.class).add(new StringTag(tag)));
     }
 
-
+    /**
+     * Remove tag from entity if exist
+     */
     public void removeTag(String tag) {
         ListTag<StringTag> tags = this.namedTag.getList("Tags", StringTag.class);
         tags.remove(new StringTag(tag));
         this.namedTag.putList("Tags", tags);
     }
 
-
+    /**
+     * @deprecated Use {@link #hasTag(String)} instead.
+     */
+    @Deprecated
     public boolean containTag(String tag) {
+        return hasTag(tag);
+    }
+
+    /**
+     * @return true if entity has a string tag
+     */
+    public boolean hasTag(String tag) {
         return this.namedTag.getList("Tags", StringTag.class).getAll().stream().anyMatch(t -> t.data.equals(tag));
     }
 
-
+    /**
+     * @return List of tags for the entity
+     */
     public List<StringTag> getAllTags() {
         return this.namedTag.getList("Tags", StringTag.class).getAll();
     }
 
-
     public float getFreezingEffectStrength() {
         return this.getDataProperty(FREEZING_EFFECT_STRENGTH);
     }
-
 
     public void setFreezingEffectStrength(float strength) {
         if (strength < 0 || strength > 1)
@@ -3151,17 +3159,14 @@ public abstract class Entity extends Location implements Metadatable, EntityID, 
         this.setDataProperty(FREEZING_EFFECT_STRENGTH, strength);
     }
 
-
     public int getFreezingTicks() {
         return this.freezingTicks;
     }
-
 
     public void setFreezingTicks(int ticks) {
         this.freezingTicks = Math.max(0, Math.min(ticks, 140));
         setFreezingEffectStrength(ticks / 140f);
     }
-
 
     public void addFreezingTicks(int increments) {
         if (freezingTicks + increments < 0) this.freezingTicks = 0;
@@ -3170,26 +3175,21 @@ public abstract class Entity extends Location implements Metadatable, EntityID, 
         setFreezingEffectStrength(this.freezingTicks / 140f);
     }
 
-
     public void setAmbientSoundInterval(float interval) {
         this.setDataProperty(AMBIENT_SOUND_INTERVAL, interval);
     }
-
 
     public void setAmbientSoundIntervalRange(float range) {
         this.setDataProperty(AMBIENT_SOUND_INTERVAL, range);
     }
 
-
     public void setAmbientSoundEvent(Sound sound) {
         this.setAmbientSoundEventName(sound.getSound());
     }
 
-
     public void setAmbientSoundEventName(String eventName) {
         this.setDataProperty(AMBIENT_SOUND_EVENT_NAME, eventName);
     }
-
 
     public void playAnimation(AnimateEntityPacket.Animation animation) {
         var viewers = new HashSet<>(this.getViewers().values());
@@ -3211,7 +3211,6 @@ public abstract class Entity extends Location implements Metadatable, EntityID, 
         pk.entityRuntimeIds.add(this.getId());
         Server.broadcastPacket(players, pk);
     }
-
 
     public void playActionAnimation(AnimatePacket.Action action, float rowingTime) {
         var viewers = new HashSet<>(this.getViewers().values());
@@ -3343,6 +3342,52 @@ public abstract class Entity extends Location implements Metadatable, EntityID, 
             return false;
         }
         return false;
+    }
+
+    public PropertySyncData getClientSyncProperties() {
+        List<EntityProperty> propertyDefs = EntityProperty.getEntityProperty(this.getIdentifier());
+
+        int[] intArray = propertyDefs.stream()
+            .filter(this::shouldSyncIntProperty)
+            .map(this::getIntPropertyValue)
+            .filter(Objects::nonNull)
+            .mapToInt(Integer::intValue)
+            .toArray();
+
+        double[] doubleArray = propertyDefs.stream()
+            .filter(this::shouldSyncFloatProperty)
+            .map(this::getFloatPropertyValue)
+            .filter(Objects::nonNull)
+            .mapToDouble(Float::doubleValue)
+            .toArray();
+
+        float[] floatArray = new float[doubleArray.length];
+        for (int i = 0; i < doubleArray.length; i++) {
+            floatArray[i] = (float) doubleArray[i];
+        }
+
+        return new PropertySyncData(intArray, floatArray);
+    }
+
+    private boolean shouldSyncIntProperty(EntityProperty prop) {
+        if (!prop.isClientSync()) return false;
+        return (prop instanceof IntEntityProperty)
+            || (prop instanceof BooleanEntityProperty)
+            || (prop instanceof EnumEntityProperty);
+    }
+
+    private Integer getIntPropertyValue(EntityProperty prop) {
+        Integer val = this.intProperties.get(prop.getIdentifier());
+        if (prop instanceof BooleanEntityProperty && val == null) return 0;
+        return val;
+    }
+
+    private boolean shouldSyncFloatProperty(EntityProperty prop) {
+        return prop.isClientSync() && (prop instanceof FloatEntityProperty);
+    }
+
+    private Float getFloatPropertyValue(EntityProperty prop) {
+        return this.floatProperties.get(prop.getIdentifier());
     }
 
     @SuppressWarnings("unchecked")

@@ -400,7 +400,6 @@ public class Server {
             Registries.PACKET.init();
             Registries.ENTITY.init();
             Registries.BLOCKENTITY.init();
-            Registries.BLOCKSTATE_ITEMMETA.init();
             Registries.ITEM_RUNTIMEID.init();
             Registries.BLOCK.init();
             Registries.BLOCKSTATE.init();
@@ -475,7 +474,6 @@ public class Server {
             Registries.PACKET.trim();
             Registries.ENTITY.trim();
             Registries.BLOCKENTITY.trim();
-            Registries.BLOCKSTATE_ITEMMETA.trim();
             Registries.BLOCKSTATE.trim();
             Registries.ITEM_RUNTIMEID.trim();
             Registries.BLOCK.trim();
@@ -646,7 +644,6 @@ public class Server {
             Registries.PACKET.reload();
             Registries.ENTITY.reload();
             Registries.BLOCKENTITY.reload();
-            Registries.BLOCKSTATE_ITEMMETA.reload();
             Registries.BLOCKSTATE.reload();
             Registries.ITEM_RUNTIMEID.reload();
             Registries.BLOCK.reload();
@@ -670,7 +667,6 @@ public class Server {
             Registries.PACKET.trim();
             Registries.ENTITY.trim();
             Registries.BLOCKENTITY.trim();
-            Registries.BLOCKSTATE_ITEMMETA.trim();
             Registries.BLOCKSTATE.trim();
             Registries.ITEM_RUNTIMEID.trim();
             Registries.BLOCK.trim();
