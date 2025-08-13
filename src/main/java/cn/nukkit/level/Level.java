@@ -94,6 +94,7 @@ import com.google.common.base.Preconditions;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.longs.Long2IntMap;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
@@ -325,7 +326,7 @@ public class Level implements Metadatable {
     private int updateLCG = ThreadLocalRandom.current().nextInt();
     private int tickRate;
     private long levelCurrentTick = 0;
-    private final Map<Long, Map<Integer, Object>> blockLightQueue = new ConcurrentHashMap<>(8, 0.9f, 1);
+    private final  Long2ObjectOpenHashMap<IntOpenHashSet>  blockLightQueue = new Long2ObjectOpenHashMap<>(8);
     private final int dimensionCount;
     ///base tick system
     private final Thread baseTickThread;
@@ -880,11 +881,12 @@ public class Level implements Metadatable {
     }
 
     public Map<Integer, Player> getChunkPlayers(int chunkX, int chunkZ) {
-        Map<Integer, ChunkLoader> chunkLoaders = this.chunkLoaders.get(Level.chunkHash(chunkX, chunkZ));
+        long chunkHash = Level.chunkHash(chunkX, chunkZ);
+        Map<Integer, ChunkLoader> chunkLoaders = this.chunkLoaders.get(chunkHash);
         if (chunkLoaders == null || chunkLoaders.isEmpty()) return Collections.emptyMap();
 
         return chunkLoaders.entrySet().stream()
-                .filter(e -> e.getValue() instanceof Player)
+                .filter(e -> e.getValue() instanceof Player && ((Player) e.getValue()).isUsingChunk(chunkHash))
                 .collect(
                         HashMap::new,
                         (m, e) -> m.put(e.getKey(), (Player) e.getValue()),
@@ -1542,9 +1544,12 @@ public class Level implements Metadatable {
                     iter.remove();
                 }
 
-                for (Entity entity : chunk.getEntities().values()) {
-                    entity.scheduleUpdate();
-                }
+                CompletableFuture.runAsync(() -> {
+                    for (Entity entity : chunk.getEntities().values()) {
+                        entity.scheduleUpdate();
+                    }
+                });
+
                 int tickSpeed = gameRules.getInteger(GameRule.RANDOM_TICK_SPEED);
                 if (tickSpeed <= 0) {
                     continue;
@@ -2240,17 +2245,19 @@ public class Level implements Metadatable {
         Long2ObjectOpenHashMap<Object> visited = new Long2ObjectOpenHashMap<>();
         Long2ObjectOpenHashMap<Object> removalVisited = new Long2ObjectOpenHashMap<>();
 
-        var iter = blockLightQueue.entrySet().iterator();
+        Iterator<Map.Entry<Long, IntOpenHashSet>> iter = blockLightQueue.entrySet().iterator();
         while (iter.hasNext() && size-- > 0) {
             var entry = iter.next();
             iter.remove();
+
             long index = entry.getKey();
-            var blocks = entry.getValue();
+            IntOpenHashSet blocks = entry.getValue();
+
             int chunkX = Level.getHashX(index);
             int chunkZ = Level.getHashZ(index);
             int bx = chunkX << 4;
             int bz = chunkZ << 4;
-            for (int blockHash : blocks.keySet()) {
+            for (int blockHash : blocks) {
                 int hi = (byte) (blockHash >>> 16);
                 int lo = (short) blockHash;
                 int y = ensureY(lo - 64);
@@ -2357,12 +2364,12 @@ public class Level implements Metadatable {
 
     public void addBlockLightUpdate(int x, int y, int z) {
         long index = chunkHash(x >> 4, z >> 4);
-        var currentMap = blockLightQueue.get(index);
-        if (currentMap == null) {
-            currentMap = new ConcurrentHashMap<>(8, 0.9f, 1);
-            this.blockLightQueue.put(index, currentMap);
+        IntOpenHashSet blockSet = blockLightQueue.get(index);
+        if (blockSet == null) {
+            blockSet = new IntOpenHashSet();
+            this.blockLightQueue.put(index, blockSet);
         }
-        currentMap.put(Level.localBlockHash(x, y, z, this), changeBlocksPresent);
+        blockSet.add(Level.localBlockHash(x, y, z, this));
     }
 
     public boolean setBlock(Vector3 pos, Block block) {
@@ -3673,23 +3680,7 @@ public class Level implements Metadatable {
             return VOID_BLOCK_COLOR;
 
         //在z轴存在高度差的地方，颜色变深或变浅
-        var nzy = getMapColoredBlockAt(x, z - 1);
-        if (nzy == null)
-            return block.getColor();
         color = block.getColor().toAwtColor();
-        if (nzy.getFloorY() > block.getFloorY()) {
-            color = darker(color, 0.875 - Math.min(5, nzy.getFloorY() - block.getFloorY()) * 0.05);
-        } else if (nzy.getFloorY() < block.getFloorY()) {
-            color = brighter(color, 0.875 - Math.min(5, block.getFloorY() - nzy.getFloorY()) * 0.05);
-        }
-
-        //效果不好，暂时禁用
-//        var deltaY = block.y - 128;
-//        if (deltaY > 0) {
-//            color = brighter(color, 1 - deltaY / (192 * 3));
-//        } else if (deltaY < 0) {
-//            color = darker(color, 1 - (-deltaY) / (192 * 3));
-//        }
 
         var up = block.getSide(BlockFace.UP);
         var up1 = block.getSideAtLayer(1, BlockFace.UP);
@@ -3698,6 +3689,13 @@ public class Level implements Metadatable {
             var g1 = color.getGreen();
             var b1 = color.getBlue();
             //在水下
+            BiomeDefinitionData data = Registries.BIOME.get(getBiomeId(block.getFloorX(), block.getFloorY(), block.getFloorZ())).data;
+            int colorInt = data.mapWaterColor;
+            int r = (int)( (((colorInt >> 16) & 0xff) / 255.0f) + BlockColor.WATER_BLOCK_COLOR.getRed()*3) / 4;
+            int g = (int) ((((colorInt >> 8) & 0xff) / 255.0f) + BlockColor.WATER_BLOCK_COLOR.getGreen()*3) / 4;
+            int b = (int) ((((colorInt) & 0xff) / 255.0f) + BlockColor.WATER_BLOCK_COLOR.getBlue()*3) / 4;
+            int a = (int) (((colorInt >> 24) & 0xff) / 255.0f);
+            BlockColor WATER_BLOCK_COLOR = new BlockColor(r, g, b, a);
             if (block.y < 62) {
                 //在海平面下
                 //海平面为62格。离海平面越远颜色越接近海洋颜色
@@ -3705,7 +3703,7 @@ public class Level implements Metadatable {
                 if (depth > 96) return WATER_BLOCK_COLOR;
                 b1 = WATER_BLOCK_COLOR.getBlue();
                 var radio = (depth / 96.0);
-                if (radio < 0.5) radio = 0.5;
+                if (radio < 0.9) radio = 0.9;
                 r1 += (WATER_BLOCK_COLOR.getRed() - r1) * radio;
                 g1 += (WATER_BLOCK_COLOR.getGreen() - g1) * radio;
             } else {
@@ -3715,6 +3713,22 @@ public class Level implements Metadatable {
                 g1 += (WATER_BLOCK_COLOR.getGreen() - g1) * 0.5;
             }
             color = new Color(r1, g1, b1);
+        }
+        if(block.isTransparent()) {
+            int y = block.getFloorY();
+            float light = 0.5f;
+            int r = (int) (color.getRed() * light);
+            int g = (int) (color.getGreen() * light);
+            int b = (int) (color.getBlue() * light);
+            color = new Color(r, g, b);
+        }
+        var nzy = getMapColoredBlockAt(x, z - 1);
+        if (nzy == null)
+            return block.getColor();
+        if (nzy.getFloorY() > block.getFloorY()) {
+            color = darker(color, 0.875 - Math.min(5, nzy.getFloorY() - block.getFloorY()) * 0.05);
+        } else if (nzy.getFloorY() < block.getFloorY()) {
+            color = brighter(color, 0.875 - Math.min(5, block.getFloorY() - nzy.getFloorY()) * 0.05);
         }
 
         return new BlockColor(color.getRed(), color.getGreen(), color.getBlue(), color.getAlpha());

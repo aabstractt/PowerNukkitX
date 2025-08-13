@@ -2836,7 +2836,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
         }
 
         if (this.nextChunkOrderRun-- <= 0 || this.chunk == null) {
-            playerChunkManager.tick();
+            CompletableFuture.runAsync(this.playerChunkManager::tick, this.server.getComputeThreadPool());
         }
 
         if (this.chunkLoadCount >= this.spawnThreshold && !this.spawned && loggedIn) {
@@ -4862,6 +4862,10 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
         }
 
         return false;
+    }
+
+    public boolean isUsingChunk(long chunkHash) {
+        return this.playerChunkManager.getUsedChunks().contains(chunkHash);
     }
 
     /**
