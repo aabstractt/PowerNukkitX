@@ -1212,7 +1212,7 @@ public abstract class Entity extends Location implements Metadatable, EntityID, 
         float newHealth = getHealth() - source.getFinalDamage();
 
         //only player
-        if (newHealth < 1 && this instanceof Player player) {
+        if (newHealth <= 0.0 && this instanceof Player player) {
             if (source.getCause() != DamageCause.VOID && source.getCause() != DamageCause.SUICIDE) {
                 boolean totem = false;
                 boolean isOffhand = false;
@@ -1311,7 +1311,7 @@ public abstract class Entity extends Location implements Metadatable, EntityID, 
     }
 
     public boolean isAlive() {
-        return this.health > 0;
+        return this.health > 0.0;
     }
 
     public boolean isClosed() {
@@ -1450,10 +1450,6 @@ public abstract class Entity extends Location implements Metadatable, EntityID, 
         }
 
         return false;
-    }
-
-    public boolean entityBaseTick() {
-        return this.entityBaseTick(1);
     }
 
     public boolean entityBaseTick(int tickDiff) {

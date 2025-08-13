@@ -350,7 +350,7 @@ public class EntityAreaEffectCloud extends Entity {
                     for (Entity collidingEntity : collidingEntities) {
                         if (!(collidingEntity instanceof EntityLiving)) continue;
 
-                        collidingEntity.attack(5);
+                        collidingEntity.attack(2);
                     }
                 }
             }

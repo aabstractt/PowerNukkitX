@@ -959,7 +959,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
                 if (dis < MOVEMENT_DISTANCE_THRESHOLD) return;
             }
             this.newPosition = newPosition;
-            this.clientMovements.offer(newPosition);
+            this.handleMovement(newPosition);
         }
     }
 
@@ -2644,11 +2644,6 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
             if (this.motionX != 0 || this.motionY != 0 || this.motionZ != 0) {
                 this.setMotion(new Vector3(motionX, motionY, motionZ));
                 motionX = motionY = motionZ = 0;
-            }
-
-            while (!this.clientMovements.isEmpty()) {
-                this.positionChanged = true;
-                this.handleMovement(this.clientMovements.poll());
             }
 
             if (!this.isSpectator()) {

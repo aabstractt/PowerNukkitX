@@ -148,19 +148,19 @@ public final class PlayerChunkManager {
 
     private void removeOutOfRadiusChunks() {
         // Unload blocks that are out of range
-        Iterator<Long> iterator = this.sentChunks.iterator();
-        while (iterator.hasNext()) {
-            long hash = iterator.next();
+        Set<Long> copySentChunks = new HashSet<>(this.sentChunks);
+        for (long hash : copySentChunks) {
             if (this.inRadiusChunks.contains(hash)) continue;
 
             // Remove the chunk from the sent chunks
-            iterator.remove();
+            this.sentChunks.remove(hash);
 
             // Unload the chunk from the player
             int x = Level.getHashX(hash);
             int z = Level.getHashZ(hash);
             if (!player.level.unregisterChunkLoader(player, x, z)) continue;
 
+            // TODO: Maybe this can be the issue
             for (Entity entity : player.level.getChunkEntities(x, z).values()) {
                 if (entity != player) {
                     entity.despawnFrom(player);

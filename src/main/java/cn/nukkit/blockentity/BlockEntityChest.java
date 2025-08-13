@@ -111,7 +111,7 @@ public class BlockEntityChest extends BlockEntitySpawnableContainer {
         return this.pairX != null && this.pairZ != null;
     }
 
-    protected @Nullable BlockEntityChest getPair() {
+    public @Nullable BlockEntityChest getPair() {
         if (this.pairX == null || this.pairZ == null) return null;
 
         BlockEntity blockEntity = this.getLevel().getBlockEntityIfLoaded(new Vector3(this.pairX, this.y, this.pairZ));

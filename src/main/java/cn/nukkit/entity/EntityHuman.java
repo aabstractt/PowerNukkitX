@@ -126,11 +126,6 @@ public class EntityHuman extends EntityHumanType {
     }
 
     @Override
-    public boolean entityBaseTick() {
-        return this.entityBaseTick(1);
-    }
-
-    @Override
     public boolean entityBaseTick(int tickDiff) {
         boolean hasUpdate = super.entityBaseTick(tickDiff);
         //handle human entity freeze

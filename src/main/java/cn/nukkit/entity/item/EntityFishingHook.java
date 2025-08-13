@@ -74,12 +74,12 @@ public class EntityFishingHook extends SlenderProjectile {
 
     @Override
     public float getGravity() {
-        return 0.05f;
+        return 0.08f;
     }
 
     @Override
     public float getDrag() {
-        return 0.04f;
+        return 0.05f;
     }
 
     @Override
@@ -258,13 +258,8 @@ public class EntityFishingHook extends SlenderProjectile {
                     player.getLevel().dropExpOrb(player, event.getExperience());
                 }
             }
-        } else if (this.shootingEntity != null) {
-            var eid = this.getDataProperty(TARGET_EID);
-            var targetEntity = this.getLevel().getEntity(eid);
-            if (targetEntity != null && targetEntity.isAlive()) { // 钓鱼竿收杆应该牵引被钓生物
-                targetEntity.setMotion(this.shootingEntity.subtract(targetEntity).divide(8).add(0, 0.3, 0));
-            }
         }
+
         this.close();
     }
 

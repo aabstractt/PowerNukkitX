@@ -880,16 +880,16 @@ public class Level implements Metadatable {
     }
 
     public Map<Integer, Player> getChunkPlayers(int chunkX, int chunkZ) {
-        long index = Level.chunkHash(chunkX, chunkZ);
-        if (this.chunkLoaders.containsKey(index)) {
-            return this.chunkLoaders.get(index).entrySet()
-                    .stream()
-                    .filter(e -> e.getValue() instanceof Player)
-                    .collect(HashMap::new, (m, e) -> {
-                        m.put(e.getKey(), (Player) e.getValue());
-                    }, HashMap::putAll);
-        }
-        return Collections.emptyMap();
+        Map<Integer, ChunkLoader> chunkLoaders = this.chunkLoaders.get(Level.chunkHash(chunkX, chunkZ));
+        if (chunkLoaders == null || chunkLoaders.isEmpty()) return Collections.emptyMap();
+
+        return chunkLoaders.entrySet().stream()
+                .filter(e -> e.getValue() instanceof Player)
+                .collect(
+                        HashMap::new,
+                        (m, e) -> m.put(e.getKey(), (Player) e.getValue()),
+                        HashMap::putAll
+                );
     }
 
     public ChunkLoader[] getChunkLoaders(int chunkX, int chunkZ) {
@@ -1033,10 +1033,10 @@ public class Level implements Metadatable {
     }
 
     public void doTick(int currentTick) {
-        this.debug("Starting players tick");
+        //this.debug("Starting players tick");
         long start = System.currentTimeMillis();
         players.values().forEach(player -> player.getSession().tick());
-        this.debug("Players tick finished in " + (System.currentTimeMillis() - start) + "ms");
+        //this.debug("Players tick finished in " + (System.currentTimeMillis() - start) + "ms");
 
         requireProvider();
         try {
@@ -1077,7 +1077,7 @@ public class Level implements Metadatable {
                 }
             }
 
-            this.debug("Starting block update");
+            //this.debug("Starting block update");
             start = System.currentTimeMillis();
             while (!this.normalUpdateQueue.isEmpty()) {
                 QueuedUpdate queuedUpdate = this.normalUpdateQueue.poll();
@@ -1099,18 +1099,19 @@ public class Level implements Metadatable {
                     }
                 }
             }
-            this.debug("Block update finished in " + (System.currentTimeMillis() - start) + "ms");
+            //this.debug("Block update finished in " + (System.currentTimeMillis() - start) + "ms");
 
-            this.debug("Starting update entities tick");
             start = System.currentTimeMillis();
             if (!this.updateEntities.isEmpty()) {
-                CompletableFuture.runAsync(() -> updateEntities.keySet()
-                        .longParallelStream().forEach(id -> {
+                CompletableFuture.runAsync(
+                        () -> updateEntities.keySet().longParallelStream().forEach(id -> {
                             Entity entity = this.updateEntities.get(id);
                             if (entity != null && entity.isAlive() && entity.isInitialized() && entity instanceof EntityAsyncPrepare entityAsyncPrepare) {
                                 entityAsyncPrepare.asyncPrepare(getTick());
                             }
-                        }), Server.getInstance().getComputeThreadPool()).join();
+                        }),
+                        Server.getInstance().getComputeThreadPool()
+                ).join();
 
                 for (long id : this.updateEntities.keySetLong()) {
                     Entity entity = this.updateEntities.get(id);
@@ -1129,19 +1130,18 @@ public class Level implements Metadatable {
                     }
                 }
             }
-            this.debug("Update entities tick finished in " + (System.currentTimeMillis() - start) + "ms");
 
-            this.debug("Starting update block entities tick");
+            //this.debug("Starting update block entities tick");
             start = System.currentTimeMillis();
             this.updateBlockEntities.removeIf(blockEntity -> !(!blockEntity.closed && blockEntity.isValid() && blockEntity.onUpdate()));
-            this.debug("Update block entities tick finished in " + (System.currentTimeMillis() - start) + "ms");
+            //this.debug("Update block entities tick finished in " + (System.currentTimeMillis() - start) + "ms");
 
-            this.debug("Starting update chunks tick");
+            //this.debug("Starting update chunks tick");
             start = System.currentTimeMillis();
             this.tickChunks();
-            this.debug("Update chunks tick finished in " + (System.currentTimeMillis() - start) + "ms");
+            //this.debug("Update chunks tick finished in " + (System.currentTimeMillis() - start) + "ms");
 
-            this.debug("Starting update changed blocks tick");
+            //this.debug("Starting update changed blocks tick");
             start = System.currentTimeMillis();
             synchronized (changedBlocks) {
                 if (!this.changedBlocks.isEmpty()) {
@@ -1180,12 +1180,12 @@ public class Level implements Metadatable {
                     this.changedBlocks.clear();
                 }
             }
-            this.debug("Update changed blocks tick finished in " + (System.currentTimeMillis() - start) + "ms");
+            //this.debug("Update changed blocks tick finished in " + (System.currentTimeMillis() - start) + "ms");
             if (this.sleepTicks > 0 && --this.sleepTicks <= 0) {
                 this.checkSleep();
             }
 
-            this.debug("Starting chunk packets tick");
+            //this.debug("Starting chunk packets tick");
             start = System.currentTimeMillis();
             for (long index : this.chunkPackets.keySet()) {
                 int chunkX = Level.getHashX(index);
@@ -1198,7 +1198,7 @@ public class Level implements Metadatable {
                 }
             }
             this.chunkPackets.clear();
-            this.debug("Chunk packets tick finished in " + (System.currentTimeMillis() - start) + "ms");
+            //this.debug("Chunk packets tick finished in " + (System.currentTimeMillis() - start) + "ms");
 
             if (gameRules.isStale()) {
                 GameRulesChangedPacket packet = new GameRulesChangedPacket();
@@ -1209,15 +1209,15 @@ public class Level implements Metadatable {
         } catch (Exception e) {
             e.printStackTrace(System.err);
         } finally {
-            this.debug("Starting players network tick");
+            //this.debug("Starting players network tick");
             start = System.currentTimeMillis();
             getPlayers().values().forEach(Player::checkNetwork);
-            this.debug("Players network tick finished in " + (System.currentTimeMillis() - start) + "ms");
+            //this.debug("Players network tick finished in " + (System.currentTimeMillis() - start) + "ms");
 
-            this.debug("Releasing tick cached blocks");
+            //this.debug("Releasing tick cached blocks");
             start = System.currentTimeMillis();
             releaseTickCachedBlocks();
-            this.debug("Tick cached blocks released in " + (System.currentTimeMillis() - start) + "ms");
+            //this.debug("Tick cached blocks released in " + (System.currentTimeMillis() - start) + "ms");
         }
     }
 

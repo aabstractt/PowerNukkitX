@@ -120,7 +120,7 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
     public boolean attack(EntityDamageEvent source) {
         if (this.noDamageTicks > 0 && source.getCause() != DamageCause.SUICIDE) {//ignore it if the cause is SUICIDE
             return false;
-        } else if (this.attackTime > 0 && !attackTimeByShieldKb) {
+        } else if (this.attackTime > 0 && !attackTimeByShieldKb && !(source instanceof EntityDamageByChildEntityEvent)) {
             EntityDamageEvent lastCause = this.getLastDamageCause();
             if (lastCause != null && lastCause.getDamage() >= source.getDamage()) {
                 return false;
@@ -227,11 +227,6 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
             }
             this.getLevel().dropExpOrb(this, getExperienceDrops());
         }
-    }
-
-    @Override
-    public boolean entityBaseTick() {
-        return this.entityBaseTick(1);
     }
 
     @Override
