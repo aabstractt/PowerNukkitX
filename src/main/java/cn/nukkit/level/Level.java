@@ -326,7 +326,7 @@ public class Level implements Metadatable {
     private int updateLCG = ThreadLocalRandom.current().nextInt();
     private int tickRate;
     private long levelCurrentTick = 0;
-    private final  Long2ObjectOpenHashMap<IntOpenHashSet>  blockLightQueue = new Long2ObjectOpenHashMap<>(8);
+    private final Map<Long, Map<Integer, Object>> blockLightQueue = new ConcurrentHashMap<>(8, 0.9f, 1);
     private final int dimensionCount;
     ///base tick system
     private final Thread baseTickThread;
@@ -1038,7 +1038,7 @@ public class Level implements Metadatable {
         //this.debug("Starting players tick");
         long start = System.currentTimeMillis();
         players.values().forEach(player -> player.getSession().tick());
-        //this.debug("Players tick finished in " + (System.currentTimeMillis() - start) + "ms");
+        this.debug("Players tick finished in " + (System.currentTimeMillis() - start) + "ms");
 
         requireProvider();
         try {
@@ -1079,7 +1079,7 @@ public class Level implements Metadatable {
                 }
             }
 
-            //this.debug("Starting block update");
+            this.debug("Starting block update");
             start = System.currentTimeMillis();
             while (!this.normalUpdateQueue.isEmpty()) {
                 QueuedUpdate queuedUpdate = this.normalUpdateQueue.poll();
@@ -1101,7 +1101,7 @@ public class Level implements Metadatable {
                     }
                 }
             }
-            //this.debug("Block update finished in " + (System.currentTimeMillis() - start) + "ms");
+            this.debug("Block update finished in " + (System.currentTimeMillis() - start) + "ms");
 
             start = System.currentTimeMillis();
             if (!this.updateEntities.isEmpty()) {
@@ -1133,17 +1133,22 @@ public class Level implements Metadatable {
                 }
             }
 
-            //this.debug("Starting update block entities tick");
+            this.debug("Starting update block entities tick");
             start = System.currentTimeMillis();
-            this.updateBlockEntities.removeIf(blockEntity -> !(!blockEntity.closed && blockEntity.isValid() && blockEntity.onUpdate()));
-            //this.debug("Update block entities tick finished in " + (System.currentTimeMillis() - start) + "ms");
+            this.updateBlockEntities.removeIf(blockEntity -> {
+                if (blockEntity.closed || blockEntity.getLevel() == null || !this.isChunkLoaded(blockEntity.getChunkX(), blockEntity.getChunkZ())) return true; // Remove closed or invalid block entities
 
-            //this.debug("Starting update chunks tick");
+                return !blockEntity.onUpdate(); // Return true if the block entity should be removed
+            });
+
+            this.debug("Update block entities tick finished in " + (System.currentTimeMillis() - start) + "ms");
+
+            this.debug("Starting update chunks tick");
             start = System.currentTimeMillis();
             this.tickChunks();
-            //this.debug("Update chunks tick finished in " + (System.currentTimeMillis() - start) + "ms");
+            this.debug("Update chunks tick finished in " + (System.currentTimeMillis() - start) + "ms");
 
-            //this.debug("Starting update changed blocks tick");
+            this.debug("Starting update changed blocks tick");
             start = System.currentTimeMillis();
             synchronized (changedBlocks) {
                 if (!this.changedBlocks.isEmpty()) {
@@ -1182,12 +1187,12 @@ public class Level implements Metadatable {
                     this.changedBlocks.clear();
                 }
             }
-            //this.debug("Update changed blocks tick finished in " + (System.currentTimeMillis() - start) + "ms");
+            this.debug("Update changed blocks tick finished in " + (System.currentTimeMillis() - start) + "ms");
             if (this.sleepTicks > 0 && --this.sleepTicks <= 0) {
                 this.checkSleep();
             }
 
-            //this.debug("Starting chunk packets tick");
+            this.debug("Starting chunk packets tick");
             start = System.currentTimeMillis();
             for (long index : this.chunkPackets.keySet()) {
                 int chunkX = Level.getHashX(index);
@@ -1200,7 +1205,7 @@ public class Level implements Metadatable {
                 }
             }
             this.chunkPackets.clear();
-            //this.debug("Chunk packets tick finished in " + (System.currentTimeMillis() - start) + "ms");
+            this.debug("Chunk packets tick finished in " + (System.currentTimeMillis() - start) + "ms");
 
             if (gameRules.isStale()) {
                 GameRulesChangedPacket packet = new GameRulesChangedPacket();
@@ -1209,17 +1214,19 @@ public class Level implements Metadatable {
                 gameRules.refresh();
             }
         } catch (Exception e) {
+            this.log.error("An error occurred while ticking level {}: {}", this.getName(), e.getMessage());
+            this.log.error("Stack trace:");
             e.printStackTrace(System.err);
         } finally {
-            //this.debug("Starting players network tick");
+            this.debug("Starting players network tick");
             start = System.currentTimeMillis();
             getPlayers().values().forEach(Player::checkNetwork);
-            //this.debug("Players network tick finished in " + (System.currentTimeMillis() - start) + "ms");
+            this.debug("Players network tick finished in " + (System.currentTimeMillis() - start) + "ms");
 
-            //this.debug("Releasing tick cached blocks");
+            this.debug("Releasing tick cached blocks");
             start = System.currentTimeMillis();
             releaseTickCachedBlocks();
-            //this.debug("Tick cached blocks released in " + (System.currentTimeMillis() - start) + "ms");
+            this.debug("Tick cached blocks released in " + (System.currentTimeMillis() - start) + "ms");
         }
     }
 
@@ -2245,19 +2252,19 @@ public class Level implements Metadatable {
         Long2ObjectOpenHashMap<Object> visited = new Long2ObjectOpenHashMap<>();
         Long2ObjectOpenHashMap<Object> removalVisited = new Long2ObjectOpenHashMap<>();
 
-        Iterator<Map.Entry<Long, IntOpenHashSet>> iter = blockLightQueue.entrySet().iterator();
+        Iterator<Map.Entry<Long, Map<Integer, Object>>> iter = blockLightQueue.entrySet().iterator();
         while (iter.hasNext() && size-- > 0) {
             var entry = iter.next();
-            iter.remove();
-
             long index = entry.getKey();
-            IntOpenHashSet blocks = entry.getValue();
+            Map<Integer, Object> blocks = entry.getValue();
+
+            iter.remove();
 
             int chunkX = Level.getHashX(index);
             int chunkZ = Level.getHashZ(index);
             int bx = chunkX << 4;
             int bz = chunkZ << 4;
-            for (int blockHash : blocks) {
+            for (int blockHash : blocks.keySet()) {
                 int hi = (byte) (blockHash >>> 16);
                 int lo = (short) blockHash;
                 int y = ensureY(lo - 64);
@@ -2364,12 +2371,12 @@ public class Level implements Metadatable {
 
     public void addBlockLightUpdate(int x, int y, int z) {
         long index = chunkHash(x >> 4, z >> 4);
-        IntOpenHashSet blockSet = blockLightQueue.get(index);
-        if (blockSet == null) {
-            blockSet = new IntOpenHashSet();
-            this.blockLightQueue.put(index, blockSet);
+        Map<Integer, Object> blockMap = blockLightQueue.get(index);
+        if (blockMap == null) {
+            blockMap = new ConcurrentHashMap<>(8, 0.9f, 1);
+            this.blockLightQueue.put(index, blockMap);
         }
-        blockSet.add(Level.localBlockHash(x, y, z, this));
+        blockMap.put(Level.localBlockHash(x, y, z, this), this);
     }
 
     public boolean setBlock(Vector3 pos, Block block) {
@@ -4405,18 +4412,19 @@ public class Level implements Metadatable {
         }
 
         // remove all invaild block entities.
-        if (!blockEntities.isEmpty()) {
+        if (!this.blockEntities.isEmpty()) {
             var iter = blockEntities.values().iterator();
             while (iter.hasNext()) {
                 BlockEntity blockEntity = iter.next();
-                if (blockEntity != null) {
-                    if (!blockEntity.isValid()) {
-                        iter.remove();
-                        blockEntity.close();
-                    }
-                } else {
-                    iter.remove();
-                }
+
+                // Check if the blockEntity has a level assigned and his chunk is loaded
+                if (blockEntity != null && blockEntity.getLevel() != null && this.isChunkLoaded(blockEntity.getChunkX(), blockEntity.getChunkZ())) continue;
+
+                iter.remove();
+
+                if (blockEntity == null) continue;
+
+                blockEntity.close();
             }
         }
 
