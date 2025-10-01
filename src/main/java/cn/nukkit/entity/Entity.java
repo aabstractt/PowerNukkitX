@@ -1297,7 +1297,7 @@ public abstract class Entity extends Location implements Metadatable, EntityID, 
             return;
         }
 
-        if (health < 1) {
+        if (health <= 0.0) {
             if (this.isAlive()) {
                 this.kill();
             }
