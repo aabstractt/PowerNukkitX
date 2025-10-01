@@ -101,9 +101,32 @@ public class BlockGrassBlock extends BlockDirt {
                 // The dirt block receiving grass must be within a 3×5×3 range of the source block
                 // where the source block is in the center of the second topmost layer of that range.
                 ThreadLocalRandom random = ThreadLocalRandom.current();
-                int x = random.nextInt((int) this.x - 1, (int) this.x + 1 + 1);
-                int y = random.nextInt((int) this.y - 3, (int) this.y + 1 + 1);
-                int z = random.nextInt((int) this.z - 1, (int) this.z + 1 + 1);
+
+                int xOffset = random.nextInt(-1, 2);
+                int yOffset = random.nextInt(-3, 2);
+                int zOffset = random.nextInt(-1, 2);
+
+                int x = this.getFloorX();
+                if (x > 0) {
+                    x -= xOffset;
+                } else {
+                    x += xOffset;
+                }
+
+                int y = this.getFloorY();
+                if (y > 0) {
+                    y -= yOffset;
+                } else {
+                    y += yOffset;
+                }
+
+                int z = this.getFloorZ();
+                if (z > 0) {
+                    z -= zOffset;
+                } else {
+                    z += zOffset;
+                }
+
                 Block block = this.getLevel().getBlock(new Vector3(x, y, z));
                 if (block.getId().equals(Block.DIRT)
                         // The dirt block must have a light level of at least 4 above it.
