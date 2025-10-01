@@ -62,6 +62,8 @@ public class AdventureSettings implements Cloneable {
     public void setPlayerPermission(PlayerPermission playerPermission) {
         this.playerPermission = playerPermission;
         this.player.setOp(playerPermission == PlayerPermission.OPERATOR);
+
+        System.out.println("OP? " + player.getName() + ": " + player.isOp());
     }
 
     public void init(@Nullable CompoundTag nbt) {
@@ -77,17 +79,6 @@ public class AdventureSettings implements Cloneable {
 
             commandPermission = player.isOp() ? CommandPermission.OPERATOR : CommandPermission.NORMAL;
             playerPermission = player.isOp() ? PlayerPermission.OPERATOR : PlayerPermission.MEMBER;
-        } else {
-            readNBT(nbt);
-        }
-
-        //Offline deop
-        if (playerPermission == PlayerPermission.OPERATOR && !player.isOp()) {
-            onOpChange(false);
-        }
-        //Offline by op
-        if (playerPermission != PlayerPermission.OPERATOR && player.isOp()) {
-            onOpChange(true);
         }
     }
 
