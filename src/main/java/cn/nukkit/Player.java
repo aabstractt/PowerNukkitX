@@ -2836,7 +2836,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
         }
 
         if (this.nextChunkOrderRun-- <= 0 || this.chunk == null) {
-            CompletableFuture.runAsync(this.playerChunkManager::tick, this.server.getComputeThreadPool());
+            this.playerChunkManager.tick();
         }
 
         if (this.chunkLoadCount >= this.spawnThreshold && !this.spawned && loggedIn) {
@@ -3763,12 +3763,12 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
 
     @Override
     public void setHealth(float health) {
-        if (health < 1) {
+        if (health <= 0.0f) {
             health = 0;
         }
         super.setHealth(health);
         Attribute attribute = this.attributes.computeIfAbsent(Attribute.MAX_HEALTH, Attribute::getAttribute);
-        attribute.setMaxValue(this.getAbsorption() % 2 != 0 ? this.getMaxHealth() + 1 : this.getMaxHealth()).setValue(health > 0 ? (health < getMaxHealth() ? health : getMaxHealth()) : 0);
+        attribute.setMaxValue(this.getAbsorption() % 2 != 0 ? this.getMaxHealth() + 1 : this.getMaxHealth()).setValue(health > 0.0 ? (health < getMaxHealth() ? health : getMaxHealth()) : 0);
         if (this.spawned) {
             UpdateAttributesPacket pk = new UpdateAttributesPacket();
             pk.entries = new Attribute[]{attribute};
@@ -3782,7 +3782,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
         super.setMaxHealth(maxHealth);
 
         Attribute attribute = this.attributes.computeIfAbsent(Attribute.MAX_HEALTH, Attribute::getAttribute);
-        attribute.setMaxValue(this.getAbsorption() % 2 != 0 ? this.getMaxHealth() + 1 : this.getMaxHealth()).setValue(health > 0 ? (health < getMaxHealth() ? health : getMaxHealth()) : 0);
+        attribute.setMaxValue(this.getAbsorption() % 2 != 0 ? this.getMaxHealth() + 1 : this.getMaxHealth()).setValue(health > 0.0 ? (health < getMaxHealth() ? health : getMaxHealth()) : 0);
         if (this.spawned) {
             UpdateAttributesPacket pk = new UpdateAttributesPacket();
             pk.entries = new Attribute[]{attribute};
