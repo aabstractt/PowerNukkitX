@@ -111,6 +111,16 @@ public class EntityIronGolem extends EntityGolem implements EntityOwnable {
     }
 
     @Override
+    public Set<String> typeFamily() {
+        return Set.of("irongolem", "mob");
+    }
+
+    @Override
+    public boolean isPersistent() {
+        return true;
+    }
+
+    @Override
     public float getWidth() {
         return 1.4f;
     }

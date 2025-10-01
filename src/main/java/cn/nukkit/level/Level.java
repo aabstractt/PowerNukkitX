@@ -40,7 +40,6 @@ import cn.nukkit.event.weather.LightningStrikeEvent;
 import cn.nukkit.inventory.BlockInventoryHolder;
 import cn.nukkit.item.Item;
 import cn.nukkit.item.ItemBucket;
-import cn.nukkit.item.customitem.ItemCustom;
 import cn.nukkit.item.enchantment.Enchantment;
 import cn.nukkit.level.format.ChunkSection;
 import cn.nukkit.level.format.ChunkState;
@@ -86,6 +85,7 @@ import cn.nukkit.utils.BlockUpdateEntry;
 import cn.nukkit.utils.GameLoop;
 import cn.nukkit.utils.Hash;
 import cn.nukkit.utils.LevelException;
+import cn.nukkit.utils.MolangVariableMap;
 import cn.nukkit.utils.TextFormat;
 import cn.nukkit.utils.Utils;
 import cn.nukkit.utils.collection.nb.Int2ObjectNonBlockingMap;
@@ -638,23 +638,39 @@ public class Level implements Metadatable {
     }
 
     public void addSound(Vector3 pos, Sound sound) {
-        this.addSound(pos, sound, 1, 1, (Player[]) null);
+        this.addSound(pos, sound.getSound(), 1, 1, (Player[]) null);
     }
 
     public void addSound(Vector3 pos, Sound sound, float volume, float pitch) {
-        this.addSound(pos, sound, volume, pitch, (Player[]) null);
+        this.addSound(pos, sound.getSound(), volume, pitch, (Player[]) null);
     }
 
     public void addSound(Vector3 pos, Sound sound, float volume, float pitch, Collection<Player> players) {
-        this.addSound(pos, sound, volume, pitch, players.toArray(Player.EMPTY_ARRAY));
+        this.addSound(pos, sound.getSound(), volume, pitch, players != null ? players.toArray(Player.EMPTY_ARRAY) : null);
     }
 
     public void addSound(Vector3 pos, Sound sound, float volume, float pitch, Player... players) {
+        this.addSound(pos, sound.getSound(), volume, pitch, players);
+    }
+
+    public void addSound(Vector3 pos, String soundName) {
+        this.addSound(pos, soundName, 1, 1, (Player[]) null);
+    }
+
+    public void addSound(Vector3 pos, String soundName, float volume, float pitch) {
+        this.addSound(pos, soundName, volume, pitch, (Player[]) null);
+    }
+
+    public void addSound(Vector3 pos, String soundName, float volume, float pitch, Collection<Player> players) {
+        this.addSound(pos, soundName, volume, pitch, players != null ? players.toArray(Player.EMPTY_ARRAY) : null);
+    }
+
+    public void addSound(Vector3 pos, String soundName, float volume, float pitch, Player... players) {
         Preconditions.checkArgument(volume >= 0 && volume <= 1, "Sound volume must be between 0 and 1");
-        Preconditions.checkArgument(pitch >= 0, "Sound pitch must be higher than 0");
+        Preconditions.checkArgument(pitch >= 0, "Sound pitch must be higher or equal to 0");
 
         PlaySoundPacket packet = new PlaySoundPacket();
-        packet.name = sound.getSound();
+        packet.name = soundName;
         packet.volume = volume;
         packet.pitch = pitch;
         packet.x = pos.getFloorX();
@@ -793,32 +809,58 @@ public class Level implements Metadatable {
         }
     }
 
-    public void addParticleEffect(Vector3 pos, ParticleEffect particleEffect) {
-        this.addParticleEffect(pos, particleEffect, -1, this.getDimension(), (Player[]) null);
+    public void addParticleEffect(Vector3 pos, ParticleEffect effect) {
+        this.addParticleEffect(pos, effect, -1L);
     }
 
-    public void addParticleEffect(Vector3 pos, ParticleEffect particleEffect, long uniqueEntityId) {
-        this.addParticleEffect(pos, particleEffect, uniqueEntityId, this.getDimension(), (Player[]) null);
+    public void addParticleEffect(Vector3 pos, ParticleEffect effect, long uniqueEntityId) {
+        this.addParticleEffect(pos, effect, uniqueEntityId, (MolangVariableMap) null);
     }
 
-    public void addParticleEffect(Vector3 pos, ParticleEffect particleEffect, long uniqueEntityId, int dimensionId) {
-        this.addParticleEffect(pos, particleEffect, uniqueEntityId, dimensionId, (Player[]) null);
+    public void addParticleEffect(Vector3 pos, ParticleEffect effect, long uniqueEntityId, MolangVariableMap molangVariables) {
+        this.addParticleEffect(pos, effect, uniqueEntityId, molangVariables, (Player[]) null);
     }
 
-    public void addParticleEffect(Vector3 pos, ParticleEffect particleEffect, long uniqueEntityId, int dimensionId, Collection<Player> players) {
-        this.addParticleEffect(pos, particleEffect, uniqueEntityId, dimensionId, players.toArray(Player.EMPTY_ARRAY));
+    public void addParticleEffect(Vector3 pos, ParticleEffect effect, long uniqueEntityId, MolangVariableMap molangVariables, Collection<Player> players) {
+        this.addParticleEffect(pos.asVector3f(), effect.getIdentifier(), uniqueEntityId, molangVariables, players != null ? players.toArray(Player.EMPTY_ARRAY) : null);
     }
 
-    public void addParticleEffect(Vector3 pos, ParticleEffect particleEffect, long uniqueEntityId, int dimensionId, Player... players) {
-        this.addParticleEffect(pos.asVector3f(), particleEffect.getIdentifier(), uniqueEntityId, dimensionId, players);
+    public void addParticleEffect(Vector3 pos, ParticleEffect effect, long uniqueEntityId, MolangVariableMap molangVariables, Player... players) {
+        this.addParticleEffect(pos.asVector3f(), effect.getIdentifier(), uniqueEntityId, molangVariables, players);
     }
 
-    public void addParticleEffect(Vector3f pos, String identifier, long uniqueEntityId, int dimensionId, Player... players) {
+    public void addParticleEffect(Vector3 pos, String effectName) {
+        this.addParticleEffect(pos, effectName, -1L);
+    }
+
+    public void addParticleEffect(Vector3 pos, String effectName, long uniqueEntityId) {
+        this.addParticleEffect(pos, effectName, uniqueEntityId, (MolangVariableMap) null);
+    }
+
+    public void addParticleEffect(Vector3 pos, String effectName, long uniqueEntityId, MolangVariableMap molangVariables) {
+        this.addParticleEffect(pos, effectName, uniqueEntityId, molangVariables, (Player[]) null);
+    }
+
+    public void addParticleEffect(Vector3 pos, String effectName, long uniqueEntityId, MolangVariableMap molangVariables, Collection<Player> players) {
+        this.addParticleEffect(pos.asVector3f(), effectName, uniqueEntityId, molangVariables, players != null ? players.toArray(Player.EMPTY_ARRAY) : null);
+    }
+
+    public void addParticleEffect(Vector3 pos, String effectName, long uniqueEntityId, MolangVariableMap molangVariables, Player... players) {
+        this.addParticleEffect(pos.asVector3f(), effectName, uniqueEntityId, molangVariables, players);
+    }
+
+    public void addParticleEffect(Vector3f pos, String identifier, long uniqueEntityId, MolangVariableMap molangVariables, Player... players) {
         SpawnParticleEffectPacket pk = new SpawnParticleEffectPacket();
         pk.identifier = identifier;
         pk.uniqueEntityId = uniqueEntityId;
-        pk.dimensionId = dimensionId;
+        pk.dimensionId = this.getDimension();
         pk.position = pos;
+
+        if (molangVariables == null) {
+            pk.molangVariablesJson = Optional.empty();
+        } else {
+            pk.molangVariablesJson = Optional.of(molangVariables.isEmpty() ? "[]" : molangVariables.toJson());
+        }
 
         if (players == null || players.length == 0) {
             addChunkPacket(pos.getFloorX() >> 4, pos.getFloorZ() >> 4, pk);
@@ -2259,33 +2301,36 @@ public class Level implements Metadatable {
             Map<Integer, Object> blocks = entry.getValue();
 
             iter.remove();
+            if (blocks == null || blocks.isEmpty()) continue;
 
             int chunkX = Level.getHashX(index);
             int chunkZ = Level.getHashZ(index);
             int bx = chunkX << 4;
             int bz = chunkZ << 4;
-            for (int blockHash : blocks.keySet()) {
+            for (int blockHash : blocks.clone()) {
                 int hi = (byte) (blockHash >>> 16);
                 int lo = (short) blockHash;
                 int y = ensureY(lo - 64);
                 int x = (hi & 0xF) + bx;
                 int z = ((hi >> 4) & 0xF) + bz;
+                
                 IChunk chunk = getChunk(x >> 4, z >> 4, false);
-                if (chunk != null) {
-                    int lcx = x & 0xF;
-                    int lcz = z & 0xF;
-                    int oldLevel = chunk.getBlockLight(lcx, y, lcz);
-                    int newLevel = Registries.BLOCK.get(chunk.getBlockState(lcx, y, lcz), x, y, z, this).getLightLevel();
-                    if (oldLevel != newLevel) {
-                        this.setBlockLightAt(x, y, z, newLevel);
-                        if (newLevel < oldLevel) {
-                            removalVisited.put(Hash.hashBlock(x, y, z), changeBlocksPresent);
-                            lightRemovalQueue.add(new Object[]{Hash.hashBlock(x, y, z), oldLevel});
-                        } else {
-                            visited.put(Hash.hashBlock(x, y, z), changeBlocksPresent);
-                            lightPropagationQueue.add(Hash.hashBlock(x, y, z));
-                        }
-                    }
+                if (chunk == null) continue;
+                
+                int lcx = x & 0xF;
+                int lcz = z & 0xF;
+                int oldLevel = chunk.getBlockLight(lcx, y, lcz);
+                int newLevel = Registries.BLOCK.get(chunk.getBlockState(lcx, y, lcz), x, y, z, this).getLightLevel();
+                if (oldLevel == newLevel) continue;
+
+                this.setBlockLightAt(x, y, z, newLevel);
+                long blockPosHash = Hash.hashBlock(x, y, z);
+                if (newLevel < oldLevel) {
+                    removalVisited.put(blockPosHash, changeBlocksPresent);
+                    lightRemovalQueue.add(new Object[]{blockPosHash, oldLevel});
+                } else {
+                    visited.put(blockPosHash, changeBlocksPresent);
+                    lightPropagationQueue.add(blockPosHash);
                 }
             }
         }
@@ -2311,6 +2356,24 @@ public class Level implements Metadatable {
                     removalVisited, visited);
             this.computeRemoveBlockLight(x, y, z + 1, lightLevel, lightRemovalQueue, lightPropagationQueue,
                     removalVisited, visited);
+        }
+
+        while (!lightPropagationQueue.isEmpty()) {
+            long node = lightPropagationQueue.poll();
+
+            int x = Hash.hashBlockX(node);
+            int y = Hash.hashBlockY(node);
+            int z = Hash.hashBlockZ(node);
+            int lightLevel = this.getBlockLightAt(x, y, z) - getBlock(x, y, z).getLightFilter();
+
+            if (lightLevel >= 1) {
+                this.computeSpreadBlockLight(x - 1, y, z, lightLevel, lightPropagationQueue, visited);
+                this.computeSpreadBlockLight(x + 1, y, z, lightLevel, lightPropagationQueue, visited);
+                this.computeSpreadBlockLight(x, y - 1, z, lightLevel, lightPropagationQueue, visited);
+                this.computeSpreadBlockLight(x, y + 1, z, lightLevel, lightPropagationQueue, visited);
+                this.computeSpreadBlockLight(x, y, z - 1, lightLevel, lightPropagationQueue, visited);
+                this.computeSpreadBlockLight(x, y, z + 1, lightLevel, lightPropagationQueue, visited);
+            }
         }
 
         while (!lightPropagationQueue.isEmpty()) {
@@ -2562,7 +2625,8 @@ public class Level implements Metadatable {
                 Entity.getDefaultNBT(source, motion, new Random().nextFloat() * 360, 0)
                         .putShort("Health", 5)
                         .putCompound("Item", NBTIO.putItemHelper(item))
-                        .putShort("PickupDelay", delay));
+                        .putShort("PickupDelay", delay)
+                        .putBoolean("ShouldDespawn", item.shouldDespawn()));
 
         if (itemEntity != null) {
             itemEntity.spawnToAll();
@@ -2916,13 +2980,11 @@ public class Level implements Metadatable {
         if (item.canBePlaced()) {
             hand = item.getBlock();
             hand.position(block);
-        } else if (item instanceof ItemCustom customItem) {
-            Block blockToPlace = customItem.getBlockPlacerTargetBlock();
-            if (blockToPlace == null || blockToPlace.isAir()) return null;
+        } else {
+            Block blockToPlace = item.getBlockPlacerTargetBlock();
+            if (blockToPlace == null) return null;
             hand = blockToPlace;
             hand.position(block);
-        } else {
-            return null;
         }
 
         // Check for valid placement conditions
@@ -3200,7 +3262,9 @@ public class Level implements Metadatable {
             (o.excludeTags != null && !o.excludeTags.isEmpty()) ||
             (o.typeClass != null) ||
             (o.nameTagEquals != null) ||
-            (o.predicate != null);
+            (o.predicate != null) ||
+            (o.families != null && !o.families.isEmpty()) ||
+            (o.excludeFamilies != null && !o.excludeFamilies.isEmpty());
 
         if (exactLocationMatch) {
             int cx = NukkitMath.floorDouble(o.location.x * INV_CHUNK_SIZE);
@@ -3208,9 +3272,9 @@ public class Level implements Metadatable {
 
             Map<Long, Entity> map = this.getChunkEntities(cx, cz, o.loadChunks);
             if (map != null && !map.isEmpty()) {
-                int lx = cn.nukkit.math.NukkitMath.floorDouble(o.location.x);
-                int ly = cn.nukkit.math.NukkitMath.floorDouble(o.location.y);
-                int lz = cn.nukkit.math.NukkitMath.floorDouble(o.location.z);
+                int lx = NukkitMath.floorDouble(o.location.x);
+                int ly = NukkitMath.floorDouble(o.location.y);
+                int lz = NukkitMath.floorDouble(o.location.z);
 
                 for (Entity e : map.values()) {
                     if (e != null && e.getFloorX() == lx && e.getFloorY() == ly && e.getFloorZ() == lz) {
@@ -4194,11 +4258,15 @@ public class Level implements Metadatable {
     }
 
     public Position getSafeSpawn(Vector3 spawn, int horizontalMaxOffset, boolean allowWaterUnder) {
+        return getSafeSpawn(spawn, horizontalMaxOffset, allowWaterUnder, true);
+    }
+
+    public Position getSafeSpawn(Vector3 spawn, int horizontalMaxOffset, boolean allowWaterUnder, boolean checkHighest) {
         if (spawn == null)
             spawn = (horizontalMaxOffset == 0) ? this.getSpawnLocation().add(0.5, 0, 0.5) : this.getFuzzySpawnLocation();
         if (spawn == null)
             return null;
-        if (standable(spawn, allowWaterUnder))
+        if (standable(spawn, allowWaterUnder) || horizontalMaxOffset == 0)
             return Position.fromObject(spawn, this);
 
         int maxY = getDimensionData().getMaxHeight();
@@ -4217,7 +4285,11 @@ public class Level implements Metadatable {
                         count++;
                         if(count > 10000) {
                             log.warn("cannot find a safe spawn around " + spawn.asBlockVector3() + ". Too many attempts!");
-                            return Position.fromObject(spawn, this);
+
+                            if(checkHighest)
+                                return getSafeSpawn(spawn.setY(getHighestBlockAt((int) spawn.getX(), (int) spawn.getZ())), horizontalMaxOffset, allowWaterUnder, false);
+                            else
+                                return Position.fromObject(spawn, this);
                         }
                         if(standable(checkLoc, allowWaterUnder)) return checkLoc;
                     }

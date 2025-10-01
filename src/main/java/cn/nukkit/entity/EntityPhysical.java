@@ -19,28 +19,21 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 
 public abstract class EntityPhysical extends EntityCreature implements EntityAsyncPrepare {
-    /**
-     * Movement accuracy threshold. Movements with an absolute value less than this threshold are considered as no movement.
-     */
+    /** Movement accuracy threshold. Movements with an absolute value less than this threshold are considered as no movement. */
     public static final float PRECISION = 0.00001f;
-
     public static final AtomicInteger globalCycleTickSpread = new AtomicInteger();
-    /**
-     * Time flooding delay is used to alleviate the situation where a large number of tasks are submitted at the same time and occupy the CPU.
-     */
+    /** Time flooding delay is used to alleviate the situation where a large number of tasks are submitted at the same time and occupy the CPU. */
     public final int tickSpread;
-    /**
-     * Provide real-time latest collision box position
-     */
+    /** Provide real-time latest collision box position */
     protected final AxisAlignedBB offsetBoundingBox;
     protected final Vector3 previousCollideMotion;
     protected final Vector3 previousCurrentMotion;
-    /**
-     * The time of free fall of an object
-     */
+    /** The time of free fall of an object */
     protected int fallingTick = 0;
     protected boolean needsRecalcMovement = true;
     private boolean needsCollisionDamage = false;
+    private static final double GROUND_FRICTION_EXPONENT = 0.5574929506502402;
+
 
     public EntityPhysical(IChunk chunk, CompoundTag nbt) {
         super(chunk, nbt);
@@ -93,7 +86,7 @@ public abstract class EntityPhysical extends EntityCreature implements EntityAsy
             EntityFreezeEvent event = new EntityFreezeEvent(this);
             this.server.getPluginManager().callEvent(event);
             if (!event.isCancelled()) {
-                //this.setMovementSpeed(); //todo 给物理实体添加freeze减速
+                //this.setMovementSpeed(); // TODO: Add freeze deceleration to physics entities
             }
         } else if (this.getFreezingTicks() > 0 && !collidedWithPowderSnow) {
             this.addFreezingTicks(-1);
@@ -113,7 +106,7 @@ public abstract class EntityPhysical extends EntityCreature implements EntityAsy
     @Override
     public void updateMovement() {
         // Detection of free fall time
-        if (isFalling()) {
+        if (this.hasGravity() && isFalling()) {
             this.fallingTick++;
         }
         super.updateMovement();
@@ -136,6 +129,11 @@ public abstract class EntityPhysical extends EntityCreature implements EntityAsy
     }
 
     protected void handleGravity() {
+        if (!this.hasGravity()) {
+            resetFallDistance();
+            this.fallingTick = 0;
+            return;
+        }
         // Gravity is always there
         this.motionY -= this.getGravity();
         if (!this.onGround && this.hasWaterAt(getFootHeight())) {
@@ -144,17 +142,19 @@ public abstract class EntityPhysical extends EntityCreature implements EntityAsy
         }
     }
 
-    /**
-     * Calculating ground friction
-     */
-
+    /** Calculating ground friction */
     protected void handleGroundFrictionMovement() {
         // No ground resistance
         if (!this.onGround) return;
         // Less than precision
         if (Math.abs(this.motionZ) < PRECISION && Math.abs(this.motionX) < PRECISION) return;
+
         // Reduce movement vector (calculate friction coefficient, slide further on ice)
-        final double factor = getGroundFrictionFactor();
+        double factor = getGroundFrictionFactor();
+        if (factor > 0.0 && factor < 1.0) {
+            factor = Math.pow(factor, GROUND_FRICTION_EXPONENT);
+        }
+
         this.motionX *= factor;
         this.motionZ *= factor;
 
@@ -162,10 +162,7 @@ public abstract class EntityPhysical extends EntityCreature implements EntityAsy
         if (Math.abs(this.motionZ) < PRECISION) this.motionZ = 0;
     }
 
-    /**
-     * Calculate fluid resistance (air/liquid)
-     */
-
+    /** Calculate fluid resistance (air/liquid) */
     protected void handlePassableBlockFrictionMovement() {
         // Less than precision
         if (Math.abs(this.motionZ) < PRECISION && Math.abs(this.motionX) < PRECISION && Math.abs(this.motionY) < PRECISION)
@@ -182,10 +179,8 @@ public abstract class EntityPhysical extends EntityCreature implements EntityAsy
 
     /**
      * Calculate the ground friction factor at the current location
-     *
      * @return The ground friction factor at the current location
      */
-
     public double getGroundFrictionFactor() {
         if (!this.onGround) return 1.0;
         return this.getLevel().getTickCachedBlock(this.temporalVector.setComponents((int) Math.floor(this.x), (int) Math.floor(this.y - 1), (int) Math.floor(this.z))).getFrictionFactor();
@@ -193,19 +188,15 @@ public abstract class EntityPhysical extends EntityCreature implements EntityAsy
 
     /**
      * Calculate the fluid resistance factor (air/water) at the current location
-     *
      * @return The fluid resistance factor at the current location
      */
-
     public double getPassableBlockFrictionFactor() {
         var block = this.getTickCachedLevelBlock();
         if (block.collidesWithBB(this.getBoundingBox(), true)) return block.getPassableBlockFrictionFactor();
         return Block.DEFAULT_AIR_FLUID_FRICTION;
     }
 
-    /**
-     * By default, the built-in implementation of nk is used, which is just a fallback algorithm.
-     */
+    /** By default, the built-in implementation of nk is used, which is just a fallback algorithm. */
     protected void handleLiquidMovement() {
         final var tmp = new Vector3();
         BlockLiquid blockLiquid = null;
@@ -264,7 +255,6 @@ public abstract class EntityPhysical extends EntityCreature implements EntityAsy
      * Get the height of the entity to float to, 0 is the bottom of the entity {@link Entity#getCurrentHeight()} For the top of the entity<br>
      * Example: <br>When the value is 0, the entity's feet touch the horizontal plane<br>When the value is getCurrentHeight/2, the entity's middle 
      * part touches the horizontal plane<br>When the value is getCurrentHeight, the entity's head touches the horizontal plane
-     *
      * @return the float
      */
     public float getFloatingHeight() {
@@ -272,6 +262,12 @@ public abstract class EntityPhysical extends EntityCreature implements EntityAsy
     }
 
     protected void handleCollideMovement(int currentTick) {
+        if (!this.canBePushedByEntities()) {
+            this.previousCollideMotion.setX(0);
+            this.previousCollideMotion.setZ(0);
+            return;
+        }
+
         var selfAABB = getOffsetBoundingBox().getOffsetBoundingBox(this.motionX, this.motionY, this.motionZ);
         var collidingEntities = this.level.fastCollidingEntities(selfAABB, this);
         collidingEntities.removeIf(entity -> !(entity.canCollide() && (entity instanceof EntityPhysical || entity instanceof Player)));
@@ -283,6 +279,8 @@ public abstract class EntityPhysical extends EntityCreature implements EntityAsy
             return;
         } else {
             if (!onCollide(currentTick, collidingEntities)) {
+                this.previousCollideMotion.setX(0);
+                this.previousCollideMotion.setZ(0);
                 return;
             }
         }
@@ -366,16 +364,14 @@ public abstract class EntityPhysical extends EntityCreature implements EntityAsy
     }
 
     protected void calculateOffsetBoundingBox() {
-        // Because it is asyncPrepare, this.offsetBoundingBox has a chance to be null, so it needs to be judged as null
         if (this.offsetBoundingBox == null) return;
-        final double dx = this.getWidth() * 0.5;
-        final double dz = this.getHeight() * 0.5;
-        this.offsetBoundingBox.setMinX(this.x - dx);
-        this.offsetBoundingBox.setMaxX(this.x + dz);
+        final double half = this.getWidth() * 0.5;
+        this.offsetBoundingBox.setMinX(this.x - half);
+        this.offsetBoundingBox.setMaxX(this.x + half);
         this.offsetBoundingBox.setMinY(this.y);
         this.offsetBoundingBox.setMaxY(this.y + this.getHeight());
-        this.offsetBoundingBox.setMinZ(this.z - dz);
-        this.offsetBoundingBox.setMaxZ(this.z + dz);
+        this.offsetBoundingBox.setMinZ(this.z - half);
+        this.offsetBoundingBox.setMaxZ(this.z + half);
     }
 
     public AxisAlignedBB getOffsetBoundingBox() {
@@ -389,7 +385,7 @@ public abstract class EntityPhysical extends EntityCreature implements EntityAsy
 
     @Override
     public float getGravity() {
-        return super.getGravity();
+        return this.hasGravity() ? super.getGravity() : 0f;
     }
 
     public int getFallingTick() {

@@ -193,6 +193,16 @@ public class EntityWarden extends EntityMob implements EntityWalkable, Vibration
     }
 
     @Override
+    public Set<String> typeFamily() {
+        return Set.of("warden", "monster", "mob");
+    }
+
+    @Override
+    public boolean isPersistent() {
+        return true;
+    }
+
+    @Override
     public Vector3 getListenerVector() {
         return this.getVector3();
     }

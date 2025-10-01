@@ -150,6 +150,16 @@ public class EntityShulker extends EntityMob implements EntityVariant {
     }
 
     @Override
+    public Set<String> typeFamily() {
+        return Set.of("shulker", "monster", "mob");
+    }
+
+    @Override
+    public boolean isPersistent() {
+        return true;
+    }
+
+    @Override
     public Item[] getDrops() {
         return new Item[]{Item.get(Item.SHULKER_SHELL, 0, Utils.rand(0, 2))};
     }

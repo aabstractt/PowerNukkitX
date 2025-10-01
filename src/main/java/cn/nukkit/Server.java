@@ -125,6 +125,7 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinWorkerThread;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
 
 /**
  * Represents a server object, global singleton.
@@ -195,11 +196,19 @@ public class Server {
     private final String filePath;
     private final String dataPath;
     private final String pluginPath;
+    public final String structurePath;
     private final Set<UUID> uniquePlayers = new HashSet<>();
     private final Map<InetSocketAddress, Player> players = new ConcurrentHashMap<>();
     private final Map<UUID, Player> playerList = new ConcurrentHashMap<>();
     private QueryRegenerateEvent queryRegenerateEvent;
     private PositionTrackingService positionTrackingService;
+
+    // Dynamic Properties defaults
+    private static volatile String DP_DEFAULT_GROUP_UUID = "00000000-0000-0000-0000-000000000000";
+    private static final int DP_MAX_STRING_BYTES = 32767;
+    private static final double DP_NUMBER_ABS_MAX = 9_223_372_036_854_775_807d;
+    private static final Pattern DP_UUID_CANON =
+                Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
 
     private final Map<Integer, Level> levels = new HashMap<>() {
         @Override
@@ -254,11 +263,16 @@ public class Server {
         if (!new File(dataPath + "players/").exists()) {
             new File(dataPath + "players/").mkdirs();
         }
+        if (!new File(dataPath + "structures/").exists()) {
+            new File(dataPath + "structures/").mkdirs();
+        }
         if (!new File(pluginPath).exists()) {
             new File(pluginPath).mkdirs();
         }
+
         this.dataPath = new File(dataPath).getAbsolutePath() + "/";
         this.pluginPath = new File(pluginPath).getAbsolutePath() + "/";
+        this.structurePath = new File(dataPath).getAbsolutePath() + "/structures/";
         String commandDataPath = new File(dataPath).getAbsolutePath() + "/command_data";
         if (!new File(commandDataPath).exists()) {
             new File(commandDataPath).mkdirs();
@@ -2676,6 +2690,19 @@ public class Server {
     public List<ExperimentEntry> getExperiments() {
         return experiments;
     }
+
+    /** Allow plugins to override the default DP group UUID (e.g., when migrating from BDS). */
+    public static void setDefaultDynamicPropertiesGroupUUID(String uuid) {
+        if (uuid == null || !DP_UUID_CANON.matcher(uuid).matches()) {
+            log.warn("DynamicProperties default group UUID rejected: '{}'", uuid);
+            return;
+        }
+        DP_DEFAULT_GROUP_UUID = uuid.toLowerCase();
+    }
+
+    public static String getDefaultDynamicPropertiesGroupUUID() { return DP_DEFAULT_GROUP_UUID; }
+    public static int    getDynamicPropertiesMaxStringBytes()   { return DP_MAX_STRING_BYTES; }
+    public static double getDynamicPropertiesNumberAbsMax()     { return DP_NUMBER_ABS_MAX; }
 
     //todo NukkitConsole 会阻塞关不掉
     private class ConsoleThread extends Thread implements InterruptibleThread {

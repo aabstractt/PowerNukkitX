@@ -292,6 +292,11 @@ public class EntityWither extends EntityBoss implements EntityFlyable, EntitySmi
     }
 
     @Override
+    public Set<String> typeFamily() {
+        return Set.of("wither", "skeleton", "monster", "undead", "mob");
+    }
+
+    @Override
     public boolean isUndead() {
         return true;
     }
@@ -303,6 +308,11 @@ public class EntityWither extends EntityBoss implements EntityFlyable, EntitySmi
 
     @Override
     public boolean isBoss() {
+        return true;
+    }
+
+    @Override
+    public boolean isPersistent() {
         return true;
     }
 

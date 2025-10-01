@@ -106,6 +106,11 @@ public class EntityHusk extends EntityZombie {
     }
 
     @Override
+    public Set<String> typeFamily() {
+        return Set.of("husk", "zombie", "undead", "monster", "mob");
+    }
+
+    @Override
     public boolean isUndead() {
         return true;
     }

@@ -201,4 +201,14 @@ public class EntityBee extends EntityAnimal implements EntityFlyable {
     public String getOriginalName() {
         return "Bee";
     }
+
+    @Override
+    public Set<String> typeFamily() {
+        return Set.of("bee", "mob", "arthropod", "pacified");
+    }
+
+    @Override
+    public boolean isPersistent() {
+        return true;
+    }
 }

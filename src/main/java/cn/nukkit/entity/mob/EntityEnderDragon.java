@@ -235,7 +235,17 @@ public class EntityEnderDragon extends EntityBoss implements EntityFlyable {
     }
 
     @Override
+    public Set<String> typeFamily() {
+        return Set.of("dragon", "mob");
+    }
+
+    @Override
     public boolean isBoss() {
+        return true;
+    }
+
+    @Override
+    public boolean isPersistent() {
         return true;
     }
 

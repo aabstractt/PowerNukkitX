@@ -172,6 +172,7 @@ public final class PlayerChunkManager {
     private void loadQueuedChunks(int trySendChunkCountPerTick, boolean force) {
         if (chunkSendQueue.isEmpty()) return;
         int triedSendChunkCount = 0;
+        LongOpenHashSet enqueue = new LongOpenHashSet();
         do {
             triedSendChunkCount++;
             long chunkHash = chunkSendQueue.dequeueLong();
@@ -183,7 +184,8 @@ public final class PlayerChunkManager {
                     IChunk chunk = chunkTask.get(10, TimeUnit.MICROSECONDS);
                     if (chunk == null || !chunk.getChunkState().canSend()) {
                         player.level.generateChunk(chunkX, chunkZ, force);
-                        chunkSendQueue.enqueue(chunkHash);
+                        enqueue.add(chunkHash);
+                        chunkLoadingQueue.remove(chunkHash);
                         continue;
                     }
                     chunkLoadingQueue.remove(chunkHash);
@@ -194,9 +196,10 @@ public final class PlayerChunkManager {
                     log.warn("read chunk timeout {} {}", chunkX, chunkZ);
                 }
             } else {
-                chunkSendQueue.enqueue(chunkHash);
+                enqueue.add(chunkHash);
             }
         } while (!chunkSendQueue.isEmpty() && triedSendChunkCount < trySendChunkCountPerTick);
+        enqueue.forEach(chunkSendQueue::enqueue);
     }
 
     private void sendChunk() {

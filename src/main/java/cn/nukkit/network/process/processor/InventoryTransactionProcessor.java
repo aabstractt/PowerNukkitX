@@ -413,6 +413,14 @@ public class InventoryTransactionProcessor extends DataPacketProcessor<Inventory
                         if (!(item instanceof ProjectileItem)) {
                             player.setLastUseTick(item.getId(), player.getLevel().getTick());//set lastUsed tick
                         }
+                        if (lastUsedItem.getUsingTicks() <= 0) {
+                            if (lastUsedItem.onUse(player, 0)) {
+                                lastUsedItem.afterUse(player);
+                            }
+                            player.removeLastUseTick(item.getId());
+                            lastUsedItem = null;
+                            return;
+                        }
                         return;
                     }
 
