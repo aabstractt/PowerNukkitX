@@ -395,7 +395,7 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
             blocks.add(block);
 
             if (maxLength != 0 && blocks.size() > maxLength) {
-                blocks.remove(0);
+                blocks.removeFirst();
             }
 
             String id = block.getId();
@@ -404,10 +404,8 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
                 if (!block.isAir()) {
                     break;
                 }
-            } else {
-                if (Arrays.binarySearch(transparent, id) < 0) {
-                    break;
-                }
+            } else if (Arrays.binarySearch(transparent, id) < 0) {
+                break;
             }
         }
 
@@ -419,20 +417,15 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
     }
 
     public Block getTargetBlock(int maxDistance, String[] transparent) {
-        try {
-            Block[] blocks = this.getLineOfSight(maxDistance, 1, transparent);
-            Block block = blocks[0];
-            if (block != null) {
-                if (transparent != null && transparent.length != 0) {
-                    if (Arrays.binarySearch(transparent, block.getId()) < 0) {
-                        return block;
-                    }
-                } else {
-                    return block;
-                }
-            }
-        } catch (Exception ignored) {
-        }
+        Block[] blocks = this.getLineOfSight(maxDistance, 1, transparent);
+        if (blocks.length == 0) return null;
+
+        Block block = blocks[0];
+        if (block == null) return null;
+
+        if (transparent == null || transparent.length == 0) return block;
+        if (Arrays.binarySearch(transparent, block.getId()) < 0) return block;
+
         return null;
     }
 
@@ -547,14 +540,11 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
     }
 
     public boolean isBlocking() {
-        if(this.getDataFlag(EntityFlag.BLOCKING)) {
-            if(this instanceof InventoryHolder holder) {
-                if(holder.getInventory() instanceof HumanInventory inventory) {
-                    return inventory.getItemInHand() instanceof ItemShield;
-                }
-            }
-        }
-        return false;
+        if (!this.getDataFlag(EntityFlag.BLOCKING)) return false;
+        if (!(this instanceof InventoryHolder holder)) return false;
+        if (!(holder.getInventory() instanceof HumanInventory inventory)) return false;
+
+        return inventory.getItemInHand() instanceof ItemShield;
     }
 
     public void setBlocking(boolean value) {
