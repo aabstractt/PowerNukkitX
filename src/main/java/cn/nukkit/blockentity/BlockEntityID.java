@@ -37,6 +37,8 @@ public interface BlockEntityID {
 
     String CONDUIT = "Conduit";
 
+    String COPPER_GOLEM_STATUE = "CopperGolemStatue";
+
     String CRAFTER = "Crafter";
 
     String CREAKING_HEART = "CreakingHeart";
@@ -84,6 +86,8 @@ public interface BlockEntityID {
     String SCULK_SENSOR = "SculkSensor";
 
     String SCULK_SHRIEKER = "SculkShrieker";
+
+    String SHELF = "Shelf";
 
     String SHULKER_BOX = "ShulkerBox";
 

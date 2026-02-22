@@ -9,6 +9,7 @@ import org.jetbrains.annotations.UnmodifiableView;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.UncheckedIOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -17,8 +18,7 @@ import java.util.Set;
 
 
 public final class ItemTags {
-    ItemTags() {
-    }
+    ItemTags() {}
 
     public final static String ARROW = "minecraft:arrow";
     public final static String BANNER = "minecraft:banner";
@@ -88,7 +88,7 @@ public final class ItemTags {
                 }
             }
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new UncheckedIOException(e);
         }
     }
 

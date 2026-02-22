@@ -15,6 +15,7 @@ import cn.nukkit.network.protocol.types.LevelSoundEvent;
 import cn.nukkit.network.protocol.types.itemstack.ContainerSlotType;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.List;
 
 
@@ -31,7 +32,7 @@ public class HorseInventory extends BaseInventory {
                 .putShort("Aux", Short.MAX_VALUE)
                 .putString("Name", ItemID.SADDLE)));
         ListTag<CompoundTag> horseArmor = new ListTag<>();
-        for (var h : List.of(ItemID.LEATHER_HORSE_ARMOR, ItemID.IRON_HORSE_ARMOR, ItemID.GOLDEN_HORSE_ARMOR, ItemID.DIAMOND_HORSE_ARMOR)) {
+        for (var h : List.of(ItemID.LEATHER_HORSE_ARMOR, ItemID.IRON_HORSE_ARMOR, ItemID.GOLDEN_HORSE_ARMOR, ItemID.DIAMOND_HORSE_ARMOR, ItemID.COPPER_HORSE_ARMOR, ItemID.NETHERITE_HORSE_ARMOR)) {
             horseArmor.add(new CompoundTag().putCompound("slotItem", new CompoundTag().putShort("Aux", Short.MAX_VALUE).putString("Name", h)));
         }
         slot0 = new CompoundTag().putList("acceptedItems", saddle).putInt("slotNumber", 0);
@@ -81,6 +82,8 @@ public class HorseInventory extends BaseInventory {
             MobArmorEquipmentPacket mobArmorEquipmentPacket = new MobArmorEquipmentPacket();
             mobArmorEquipmentPacket.eid = this.getHolder().getId();
             mobArmorEquipmentPacket.slots = new Item[]{Item.AIR, this.getHorseArmor(), Item.AIR, Item.AIR};
+            mobArmorEquipmentPacket.body = this.getHorseArmor();
+
             Server.broadcastPacket(this.getViewers(), mobArmorEquipmentPacket);
         }
     }
@@ -125,7 +128,7 @@ public class HorseInventory extends BaseInventory {
         try {
             updateEquipmentPacket.namedtag = NBTIO.writeNetwork(nbt);
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new UncheckedIOException(e);
         }
         return updateEquipmentPacket;
     }

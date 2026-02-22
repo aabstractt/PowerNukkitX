@@ -8,7 +8,6 @@ import cn.nukkit.inventory.DoubleChestInventory;
 import cn.nukkit.level.format.IChunk;
 import cn.nukkit.math.Vector3;
 import cn.nukkit.nbt.tag.CompoundTag;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 
@@ -16,10 +15,6 @@ import java.util.Objects;
  * @author MagicDroidX (Nukkit Project)
  */
 public class BlockEntityChest extends BlockEntitySpawnableContainer {
-
-    private @Nullable Integer pairX;
-    private @Nullable Integer pairZ;
-
     protected DoubleChestInventory doubleInventory = null;
 
     public BlockEntityChest(IChunk chunk, CompoundTag nbt) {
@@ -34,20 +29,20 @@ public class BlockEntityChest extends BlockEntitySpawnableContainer {
 
     @Override
     public void close() {
-        if (this.closed) return;
+        if (!closed) {
+            unpair();
+            this.getInventory().getViewers().forEach(p -> p.removeWindow(this.getInventory()));
+            this.getRealInventory().getViewers().forEach(p -> p.removeWindow(this.getRealInventory()));
 
-        unpair();
-        this.getInventory().getViewers().forEach(p -> p.removeWindow(this.getInventory()));
-        this.getRealInventory().getViewers().forEach(p -> p.removeWindow(this.getRealInventory()));
-
-        this.closed = true;
-        if (this.chunk != null) {
-            this.chunk.removeBlockEntity(this);
+            this.closed = true;
+            if (this.chunk != null) {
+                this.chunk.removeBlockEntity(this);
+            }
+            if (this.level != null) {
+                this.level.removeBlockEntity(this);
+            }
+            this.level = null;
         }
-        if (this.level != null) {
-            this.level.removeBlockEntity(this);
-        }
-        this.level = null;
     }
 
     @Override
@@ -74,52 +69,66 @@ public class BlockEntityChest extends BlockEntitySpawnableContainer {
     }
 
     protected void checkPairing() {
-        if (this.pairX == null || this.pairZ == null) return;
-
-        if (!level.loadChunk(this.pairX >> 4, this.pairZ >> 4)) {
-            this.doubleInventory = null;
-
-            return;
-        }
-
         BlockEntityChest pair = this.getPair();
-        if (pair == null) {
-            this.doubleInventory = null;
 
-            this.pairX = this.pairZ = null;
+        if (pair != null) {
+            if (!pair.isPaired()) {
+                pair.pairWith(this);
+                this.pairWith(pair);
+            }
 
-            return;
-        }
-
-        if (!pair.isPaired()) {
-            pair.pairWith(this);
-            this.pairWith(pair);
-        }
-
-        if (pair.doubleInventory != null) {
-            this.doubleInventory = pair.doubleInventory;
-        } else if (this.doubleInventory == null) {
-            if ((pair.getFloorX() + (pair.getFloorZ() << 15)) > (this.getFloorX() + (this.getFloorZ() << 15))) { //Order them correctly
-                this.doubleInventory = pair.doubleInventory = new DoubleChestInventory(pair, this);
-            } else {
-                this.doubleInventory = pair.doubleInventory = new DoubleChestInventory(this, pair);
+            if (pair.doubleInventory != null) {
+                this.doubleInventory = pair.doubleInventory;
+                this.namedTag.putBoolean("pairlead", false);
+            } else if (this.doubleInventory == null) {
+                this.namedTag.putBoolean("pairlead", true);
+                if ((pair.x + ((int) pair.z << 15)) > (this.x + ((int) this.z << 15))) { //Order them correctly
+                    this.doubleInventory = new DoubleChestInventory(pair, this);
+                } else {
+                    this.doubleInventory = new DoubleChestInventory(this, pair);
+                }
+            }
+        } else {
+            if (level.isChunkLoaded(this.namedTag.getInt("pairx") >> 4, this.namedTag.getInt("pairz") >> 4)) {
+                this.doubleInventory = null;
+                this.namedTag.remove("pairx");
+                this.namedTag.remove("pairz");
+                this.namedTag.remove("pairlead");
             }
         }
     }
 
     public boolean isPaired() {
-        return this.pairX != null && this.pairZ != null;
+        return this.namedTag.contains("pairx") && this.namedTag.contains("pairz");
     }
 
-    public @Nullable BlockEntityChest getPair() {
-        if (this.pairX == null || this.pairZ == null) return null;
+    public BlockEntityChest getPair() {
+        if (this.isPaired()) {
+            BlockEntity blockEntity = this.getLevel().getBlockEntityIfLoaded(new Vector3(this.namedTag.getInt("pairx"), this.y, this.namedTag.getInt("pairz")));
+            if (blockEntity instanceof BlockEntityChest) {
+                return (BlockEntityChest) blockEntity;
+            }
+        }
 
-        BlockEntity blockEntity = this.getLevel().getBlockEntityIfLoaded(new Vector3(this.pairX, this.y, this.pairZ));
-        return blockEntity instanceof BlockEntityChest ? (BlockEntityChest) blockEntity : null;
+        return null;
     }
 
     public boolean pairWith(BlockEntityChest chest) {
-        if (this.isPaired() || chest.isPaired()) return false;
+        if (this.isPaired()) {
+            int x1 = this.namedTag.getInt("pairx");
+            int z1 = this.namedTag.getInt("pairz");
+            if (!(chest.x == x1 && chest.z == z1)) {
+                return false;
+            }
+        }
+
+        if (chest.isPaired()) {
+            int x2 = chest.namedTag.getInt("pairx");
+            int z2 = chest.namedTag.getInt("pairz");
+            if (!(this.x == x2 && this.z == z2)) {
+                return false;
+            }
+        }
 
         this.createPair(chest);
         this.checkPairing();
@@ -131,59 +140,49 @@ public class BlockEntityChest extends BlockEntitySpawnableContainer {
     }
 
     public void createPair(BlockEntityChest chest) {
-        this.pairX = chest.getFloorX();
-        this.pairZ = chest.getFloorZ();
-
-        chest.pairX = this.getFloorX();
-        chest.pairZ = this.getFloorZ();
+        this.namedTag.putInt("pairx", (int) chest.x);
+        this.namedTag.putInt("pairz", (int) chest.z);
+        chest.namedTag.putInt("pairx", (int) this.x);
+        chest.namedTag.putInt("pairz", (int) this.z);
     }
 
     public boolean unpair() {
+        if (!this.isPaired()) {
+            return false;
+        }
         BlockEntityChest chest = this.getPair();
-        if (chest == null) return false;
-
-        chest.doubleInventory = null;
-        chest.pairX = null;
-        chest.pairZ = null;
-        chest.spawnToAll();
 
         this.doubleInventory = null;
-        this.pairX = null;
-        this.pairZ = null;
+        this.namedTag.remove("pairx");
+        this.namedTag.remove("pairz");
+
         this.spawnToAll();
+
+        if (chest != null) {
+            chest.namedTag.remove("pairx");
+            chest.namedTag.remove("pairz");
+            chest.doubleInventory = null;
+            chest.checkPairing();
+            chest.spawnToAll();
+        }
+        this.checkPairing();
 
         return true;
     }
 
     @Override
-    public String getName() {
-        return this.name != null ? this.name : "Chest";
-    }
-
-    @Override
-    public boolean hasName() {
-        return this.name != null;
-    }
-
-    @Override
-    public void setName(String name) {
-        this.name = name == null || name.isEmpty() ? null : name;
-    }
-
-    @Override
-    public void onBreak(boolean isSilkTouch) {
-        unpair();
-        super.onBreak(isSilkTouch);
-    }
-
-    @Override
     public CompoundTag getSpawnCompound() {
-        CompoundTag nbt = super.getSpawnCompound();
-        if (this.name != null) nbt.putString("CustomName", this.name);
-
-        if (this.pairX == null || this.pairZ == null) return nbt;
-
-        return nbt.putInt("pairx", this.pairX).putInt("pairz", this.pairZ);
+        CompoundTag spawnCompound = super.getSpawnCompound()
+                .putBoolean("isMovable", this.isMovable());
+        if (this.isPaired()) {
+            spawnCompound.putBoolean("pairlead", this.namedTag.getBoolean("pairlead"))
+                    .putInt("pairx", this.namedTag.getInt("pairx"))
+                    .putInt("pairz", this.namedTag.getInt("pairz"));
+        }
+        if (this.hasName()) {
+            spawnCompound.put("CustomName", this.namedTag.get("CustomName"));
+        }
+        return spawnCompound;
     }
 
     @Override
@@ -192,24 +191,28 @@ public class BlockEntityChest extends BlockEntitySpawnableContainer {
     }
 
     @Override
-    public void saveNBT() {
-        super.saveNBT();
-
-        if (this.name != null) this.namedTag.putString("CustomName", this.name);
-
-        if (this.pairX == null || this.pairZ == null) return;
-
-        this.namedTag.putInt("pairx", this.pairX);
-        this.namedTag.putInt("pairz", this.pairZ);
+    public String getName() {
+        return this.hasName() ? this.namedTag.getString("CustomName") : "Chest";
     }
 
     @Override
-    protected void initBlockEntity() {
-        super.initBlockEntity();
+    public boolean hasName() {
+        return this.namedTag.contains("CustomName");
+    }
 
-        if (this.namedTag.contains("pairx") && this.namedTag.contains("pairz")) {
-            this.pairX = this.namedTag.getInt("pairx");
-            this.pairZ = this.namedTag.getInt("pairz");
+    @Override
+    public void setName(String name) {
+        if (name == null || name.isEmpty()) {
+            this.namedTag.remove("CustomName");
+            return;
         }
+
+        this.namedTag.putString("CustomName", name);
+    }
+
+    @Override
+    public void onBreak(boolean isSilkTouch) {
+        unpair();
+        super.onBreak(isSilkTouch);
     }
 }

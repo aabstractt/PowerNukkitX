@@ -8,6 +8,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.jar.JarEntry;
@@ -15,32 +16,57 @@ import java.util.jar.JarFile;
 
 
 /**
- * 注册插件多语言，要求插件资源文件中存在一个language文件夹，或者指定language文件夹的外部保存路径
+ * Manages internationalization (i18n) registration and reloading for plugins, enabling multi-language support.
  * <p>
- * 多语言文件要求以{@link LangCode}.lang的格式保存
+ * This utility class provides static methods to register and reload plugin language resources, supporting both
+ * embedded resources (inside the plugin JAR) and external language folders. It maintains a registry of
+ * {@link PluginI18n} instances for each plugin, allowing efficient access and management of translations.
+ * </p>
+ *
+ * <h2>Features:</h2>
+ * <ul>
+ *   <li>Registers plugin language resources from JAR or external folders.</li>
+ *   <li>Supports reloading of language resources at runtime.</li>
+ *   <li>Handles language files in the format <code>language/{@link LangCode}.json</code>.</li>
+ *   <li>Provides access to the {@link PluginI18n} instance for each plugin.</li>
+ *   <li>Only supports plugins extending {@link PluginBase}.</li>
+ * </ul>
+ *
+ * <h2>Usage Example:</h2>
+ * <pre>
+ *     PluginI18n i18n = PluginI18nManager.register(plugin);
+ *     boolean reloaded = PluginI18nManager.reload(plugin);
+ *     String message = PluginI18nManager.getI18n(plugin).tr(LangCode.fr_FR, "welcome.message");
+ * </pre>
+ *
+ * <h2>Thread Safety:</h2>
  * <p>
- * To register a plugin for multiple languages, require the existence of a language folder in the plugin resource file, or specify an external path to the language folder
- * <p>
- * Multi-language files are required to be saved in the format {@link LangCode}.lang
- * <p>
- * Only support Java Plugin {@link PluginBase}
+ * This class is thread-safe for typical usage, as the internal registry is only modified via synchronized static methods.
+ * </p>
+ *
+ * @author PowerNukkitX Team
+ * @since 1.0
  */
 
 
 @Slf4j
 public final class PluginI18nManager {
+    /**
+     * Internal registry mapping plugin file names to their PluginI18n instances.
+     */
     private static final HashMap<String, PluginI18n> PLUGINS_MULTI_LANGUAGE = new HashMap<>();
 
+    /**
+     * Private constructor to prevent instantiation of this utility class.
+     */
     private PluginI18nManager() {
     }
 
     /**
-     * 重新加载指定插件的多语言，多语言保存在插件jar中的language文件夹下
-     * <p>
-     * Reload the multilanguage of the specified plugin, which is stored in the language folder of the plugin jar
+     * Reloads the multilanguage resources for the specified plugin from the language folder inside the plugin JAR.
      *
-     * @param plugin the plugin
-     * @return the boolean
+     * @param plugin the plugin whose language resources should be reloaded
+     * @return true if at least one language file was reloaded, false otherwise
      */
     public static boolean reload(PluginBase plugin) {
         var i18n = PLUGINS_MULTI_LANGUAGE.get(plugin.getFile().getName());
@@ -52,7 +78,7 @@ public final class PluginI18nManager {
                 JarEntry entry = jarEntrys.nextElement();
                 String name = entry.getName();
                 if (name.startsWith("language") && name.endsWith(".json")) {
-                    // 开始读取文件内容
+                    // Begin reading the file contents
                     InputStream inputStream = plugin.getResource(name);
                     assert inputStream != null;
                     i18n.reloadLang(LangCode.from(name.substring(9, name.indexOf("."))), inputStream);
@@ -62,18 +88,17 @@ public final class PluginI18nManager {
             }
             return count > 0;
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            log.error("Failed to reload language files from plugin JAR", e);
+            return false;
         }
     }
 
     /**
-     * 重新加载指定插件的多语言
-     * <p>
-     * Reload multilingual for a given plugin
+     * Reloads the multilanguage resources for the specified plugin from an external language folder.
      *
-     * @param plugin the plugin
-     * @param path   language文件夹的路径
-     * @return the boolean
+     * @param plugin the plugin whose language resources should be reloaded
+     * @param path   the path to the external language folder
+     * @return true if at least one language file was reloaded, false otherwise
      */
     public static boolean reload(PluginBase plugin, String path) {
         var i18n = PLUGINS_MULTI_LANGUAGE.get(plugin.getFile().getName());
@@ -88,7 +113,7 @@ public final class PluginI18nManager {
                     i18n.reloadLang(LangCode.from(f.getName().replace(".json", "")), inputStream);
                     count++;
                 } catch (IOException e) {
-                    throw new RuntimeException(e);
+                    throw new UncheckedIOException(e);
                 }
             }
             return count > 0;
@@ -99,12 +124,11 @@ public final class PluginI18nManager {
     }
 
     /**
-     * 注册插件多语言
-     * <p>
-     * Register Plugin Multilanguage
+     * Registers multilanguage resources for the specified plugin from the language folder inside the plugin JAR.
      *
-     * @param plugin the plugin
-     * @return the boolean
+     * @param plugin the plugin to register
+     * @return the PluginI18n instance associated with the plugin
+     * @throws RuntimeException if no language files exist in the plugin resources folder
      */
     public static PluginI18n register(PluginBase plugin) {
         try (JarFile jarFile = new JarFile(plugin.getFile())) {
@@ -114,7 +138,7 @@ public final class PluginI18nManager {
                 JarEntry entry = jarEntrys.nextElement();
                 String name = entry.getName();
                 if (name.startsWith("language") && name.endsWith(".json")) {
-                    // 开始读取文件内容
+                    // Begin reading the file contents
                     InputStream inputStream = plugin.getResource(name);
                     assert inputStream != null;
                     pluginMultiLanguage.addLang(LangCode.from(name.substring(9, name.indexOf("."))), inputStream);
@@ -124,18 +148,17 @@ public final class PluginI18nManager {
             PLUGINS_MULTI_LANGUAGE.put(plugin.getFile().getName(), pluginMultiLanguage);
             return pluginMultiLanguage;
         } catch (IOException e) {
-            throw new RuntimeException("No language exists in the plugin resources folder");
+            throw new IllegalStateException("No language exists in the plugin resources folder");
         }
     }
 
     /**
-     * 注册插件多语言
-     * <p>
-     * Register Plugin Multilanguage
+     * Registers multilanguage resources for the specified plugin from an external language folder.
      *
-     * @param plugin the plugin
-     * @param path   language文件夹的路径<br>Path to the language folder
-     * @return the boolean
+     * @param plugin the plugin to register
+     * @param path   the path to the external language folder
+     * @return the PluginI18n instance associated with the plugin
+     * @throws RuntimeException if the path does not represent a folder or does not exist
      */
     public static PluginI18n register(PluginBase plugin, String path) {
         var file = new File(path);
@@ -147,16 +170,22 @@ public final class PluginI18nManager {
                 try (InputStream inputStream = new FileInputStream(f)) {
                     pluginMultiLanguage.addLang(LangCode.from(f.getName().replace(".json", "")), inputStream);
                 } catch (IOException e) {
-                    throw new RuntimeException(e);
+                    throw new UncheckedIOException(e);
                 }
             }
             PLUGINS_MULTI_LANGUAGE.put(plugin.getFile().getName(), pluginMultiLanguage);
             return pluginMultiLanguage;
         } else {
-            throw new RuntimeException("The path does not represent a folder or not exists!");
+            throw new IllegalStateException("The path does not represent a folder or not exists!");
         }
     }
 
+    /**
+     * Returns the PluginI18n instance associated with the specified plugin, or null if not registered.
+     *
+     * @param plugin the plugin
+     * @return the PluginI18n instance, or null if not found
+     */
     @Nullable
     public static PluginI18n getI18n(PluginBase plugin) {
         return PLUGINS_MULTI_LANGUAGE.get(plugin.getFile().getName());

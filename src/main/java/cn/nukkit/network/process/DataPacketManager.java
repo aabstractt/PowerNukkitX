@@ -9,15 +9,15 @@ import org.jetbrains.annotations.NotNull;
 /**
  * DataPacketManager is a static class to manage DataPacketProcessors and process DataPackets.
  */
-@SuppressWarnings("rawtypes")
 public final class DataPacketManager {
-    private final Int2ObjectOpenHashMap<DataPacketProcessor> PROCESSORS = new Int2ObjectOpenHashMap<>(300);
+    private final Int2ObjectOpenHashMap<DataPacketProcessor<? extends DataPacket>> PROCESSORS = new Int2ObjectOpenHashMap<>(300);
 
     public DataPacketManager() {
         registerDefaultProcessors();
     }
 
-    public void registerProcessor(@NotNull DataPacketProcessor... processors) {
+    @SafeVarargs
+    public final void registerProcessor(@NotNull DataPacketProcessor<? extends DataPacket>... processors) {
         for (var processor : processors) {
             PROCESSORS.put(processor.getPacketId(), processor);
         }
@@ -31,8 +31,7 @@ public final class DataPacketManager {
     public void processPacket(@NotNull PlayerHandle playerHandle, @NotNull DataPacket packet) {
         var processor = PROCESSORS.get(packet.pid());
         if (processor != null) {
-            //noinspection unchecked
-            processor.handle(playerHandle, packet);
+            processor.handlePacket(playerHandle, packet);
         } else {
             throw new UnsupportedOperationException("No processor found for packet " + packet.getClass().getName() + " with id " + packet.pid() + ".");
         }
@@ -68,16 +67,6 @@ public final class DataPacketManager {
                 new SetPlayerGameTypeProcessor(),
                 new LecternUpdateProcessor(),
                 new MapInfoRequestProcessor(),
-                /*
-                 * Minecraft doesn't really use this packet any more, and the client can send it and play the music it wants,
-                 * even though it's of no interest to the gameplay.
-                 * The client isn't supposed to be able to broadcast a sound to the whole server.
-                 * @Zwuiix
-                new LevelSoundEventProcessor(),
-                new LevelSoundEventProcessorV1(),
-                new LevelSoundEventProcessorV2(),
-                */
-                //new PlayerHotbarProcessor(),
                 new ServerSettingsRequestProcessor(),
                 new RespawnProcessor(),
                 new BookEditProcessor(),
@@ -86,7 +75,6 @@ public final class DataPacketManager {
                 new PositionTrackingDBClientRequestProcessor(),
                 new TickSyncProcessor(),
                 new RequestPermissionsProcessor(),
-                new RiderJumpProcessor(),
                 new ItemStackRequestPacketProcessor(),
                 new SetLocalPlayerAsInitializedPacketProcessor(),
                 new ToggleCrafterSlotRequestPacketProcessor()

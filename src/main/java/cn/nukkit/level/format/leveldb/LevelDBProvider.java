@@ -44,6 +44,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.lang.ref.WeakReference;
 import java.nio.ByteOrder;
 import java.nio.file.Files;
@@ -72,6 +73,8 @@ public class LevelDBProvider implements LevelProvider {
     protected final LevelDBStorage storage;
     protected final Level level;
     protected final String path;
+    protected CompoundTag worldDynamicProperties = new CompoundTag();
+    protected boolean worldDynamicPropertiesDirty = false;
 
     public LevelDBProvider(Level level, String path) throws IOException {
         this.storage = CACHE.computeIfAbsent(path, p -> {
@@ -81,7 +84,7 @@ public class LevelDBProvider implements LevelProvider {
                         .compressionType(CompressionType.ZLIB_RAW)
                         .blockSize(64 * 1024));
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                throw new UncheckedIOException(e);
             }
         });
         this.path = path;
@@ -94,6 +97,10 @@ public class LevelDBProvider implements LevelProvider {
         } else {
             this.levelDat = levelDat;
         }
+
+        CompoundTag dp = this.storage.readWorldDynamicProperties();
+        this.worldDynamicProperties = (dp == null) ? new CompoundTag() : dp;
+        this.worldDynamicPropertiesDirty = false;
     }
 
     @UsedByReflection
@@ -139,21 +146,22 @@ public class LevelDBProvider implements LevelProvider {
             output.write(levelDatMagic);//magic number
             NBTIO.write(createWorldDataNBT(levelDat), output, ByteOrder.LITTLE_ENDIAN);
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new UncheckedIOException(e);
         }
     }
 
     public IChunk loadChunk(long index, int chunkX, int chunkZ, boolean create) {
-        IChunk chunk;
-        try {
-            chunk = storage.readChunk(chunkX, chunkZ, this);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        IChunk chunk = this.chunks.get(index);
+        if(chunk == null) {
+            try {
+                chunk = storage.readChunk(chunkX, chunkZ, this);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
         }
         if (chunk == null) {
             if (create) {
-                chunk = this.getEmptyChunk(chunkX, chunkZ);
-                putChunk(index, chunk);
+                chunk = getOrPutChunk(index, this.getEmptyChunk(chunkX, chunkZ));
             }
         } else {
             if (Server.getInstance().getSettings().chunkSettings().convertBDSChunks() && chunk.isPopulated()) {
@@ -250,7 +258,17 @@ public class LevelDBProvider implements LevelProvider {
         return isChunkLoaded(Level.chunkHash(X, Z));
     }
 
+    public IChunk getOrPutChunk(long index, IChunk chunk) {
+        IChunk existing = this.chunks.putIfAbsent(index, chunk);
+        return existing != null ? existing : chunk; 
+    }
+
     public void putChunk(long index, IChunk chunk) {
+        if(this.chunks.containsKey(index)) {
+            level.getPlayers().values().forEach(player -> {
+                player.getPlayerChunkManager().getUsedChunks().remove(index);
+            });
+        }
         chunks.put(index, chunk);
     }
 
@@ -493,6 +511,7 @@ public class LevelDBProvider implements LevelProvider {
 
     @Override
     public void saveLevelData() {
+        flushWorldDynamicProperties();
         writeLevelDat(path, getDimensionData(), this.levelDat);
     }
 
@@ -571,19 +590,17 @@ public class LevelDBProvider implements LevelProvider {
 
     @Override
     public IChunk getChunk(int chunkX, int chunkZ, boolean create) {
-        var tmp = getThreadLastChunk();
+        var tmp = getLoadedChunk(chunkX, chunkZ);
         if (tmp != null && tmp.getX() == chunkX && tmp.getZ() == chunkZ) {
             return tmp;
         }
         long index = Level.chunkHash(chunkX, chunkZ);
         lastChunk.set(new WeakReference<>(tmp = chunks.get(index)));
-        if (tmp != null) {
-            return tmp;
-        } else {
+        if (tmp == null) {
             tmp = this.loadChunk(index, chunkX, chunkZ, create);
             lastChunk.set(new WeakReference<>(tmp));
-            return tmp;
         }
+        return tmp;
     }
 
     @Override
@@ -599,12 +616,36 @@ public class LevelDBProvider implements LevelProvider {
 
     @Override
     public void close() {
+        flushWorldDynamicProperties();
         storage.close();
     }
 
     @Override
     public boolean isChunkGenerated(int chunkX, int chunkZ) {
         return true;
+    }
+
+    public CompoundTag getWorldDynamicProperties() {
+        return this.worldDynamicProperties;
+    }
+
+    public void setWorldDynamicProperties(CompoundTag tag) {
+        this.worldDynamicProperties = tag == null ? new CompoundTag() : tag;
+        this.worldDynamicPropertiesDirty = false;
+    }
+
+    public boolean isWorldDynamicPropertiesDirty() {
+        return this.worldDynamicPropertiesDirty;
+    }
+
+    public void setWorldDynamicPropertiesDirty(boolean dirty) {
+        this.worldDynamicPropertiesDirty = dirty;
+    }
+
+    private void flushWorldDynamicProperties() {
+        if (!this.worldDynamicPropertiesDirty) return;
+        this.storage.writeWorldDynamicProperties(this.worldDynamicProperties);
+        this.worldDynamicPropertiesDirty = false;
     }
 
     public synchronized LevelDat readLevelDat() throws IOException {
@@ -619,7 +660,7 @@ public class LevelDBProvider implements LevelProvider {
             CompoundTag abilities = d.getCompound("abilities");
             CompoundTag experiments = d.getCompound("experiments");
             GameRules gameRules = GameRules.getDefault();
-            gameRules.setGameRule(GameRule.COMMAND_BLOCK_OUTPUT, d.getBoolean("bonusChestSpawned"));
+            gameRules.setGameRule(GameRule.COMMAND_BLOCK_OUTPUT, d.getBoolean("commandBlockOutput"));
             gameRules.setGameRule(GameRule.COMMAND_BLOCKS_ENABLED, d.getBoolean("commandBlocksEnabled"));
             gameRules.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, d.getBoolean("doDayLightCycle"));
             gameRules.setGameRule(GameRule.DO_ENTITY_DROPS, d.getBoolean("doEntityDrops"));
@@ -632,26 +673,31 @@ public class LevelDBProvider implements LevelProvider {
             gameRules.setGameRule(GameRule.DO_TILE_DROPS, d.getBoolean("doTileDrops"));
             gameRules.setGameRule(GameRule.DO_WEATHER_CYCLE, d.getBoolean("doWeatherCycle"));
             gameRules.setGameRule(GameRule.DROWNING_DAMAGE, d.getBoolean("drowningDamage"));
+            gameRules.setGameRule(GameRule.EXPERIMENTAL_GAMEPLAY, d.getBoolean("experimentalGameplay"));
             gameRules.setGameRule(GameRule.FALL_DAMAGE, d.getBoolean("fallDamage"));
             gameRules.setGameRule(GameRule.FIRE_DAMAGE, d.getBoolean("fireDamage"));
             gameRules.setGameRule(GameRule.FREEZE_DAMAGE, d.getBoolean("freezeDamage"));
             gameRules.setGameRule(GameRule.FUNCTION_COMMAND_LIMIT, d.getInt("functionCommandLimit"));
             gameRules.setGameRule(GameRule.KEEP_INVENTORY, d.getBoolean("keepInventory"));
+            gameRules.setGameRule(GameRule.LOCATOR_BAR, d.getBoolean("locatorBar"));
             gameRules.setGameRule(GameRule.MAX_COMMAND_CHAIN_LENGTH, d.getInt("maxCommandChainLength"));
             gameRules.setGameRule(GameRule.MOB_GRIEFING, d.getBoolean("mobGriefing"));
             gameRules.setGameRule(GameRule.NATURAL_REGENERATION, d.getBoolean("naturalRegeneration"));
+            gameRules.setGameRule(GameRule.PLAYERS_SLEEPING_PERCENTAGE, d.getInt("playersSleepingPercentage"));
+            gameRules.setGameRule(GameRule.PROJECTILES_CAN_BREAK_BLOCKS, d.getBoolean("projectilesCanBreakBlocks"));
             gameRules.setGameRule(GameRule.PVP, d.getBoolean("pvp"));
+            gameRules.setGameRule(GameRule.RANDOM_TICK_SPEED, d.getInt("randomTickSpeed"));
+            gameRules.setGameRule(GameRule.RECIPES_UNLOCK, d.getBoolean("recipesUnlock"));
             gameRules.setGameRule(GameRule.RESPAWN_BLOCKS_EXPLODE, d.getBoolean("respawnBlocksExplode"));
             gameRules.setGameRule(GameRule.SEND_COMMAND_FEEDBACK, d.getBoolean("sendCommandFeedback"));
             gameRules.setGameRule(GameRule.SHOW_BORDER_EFFECT, d.getBoolean("showBorderEffect"));
             gameRules.setGameRule(GameRule.SHOW_COORDINATES, d.getBoolean("showCoordinates"));
+            gameRules.setGameRule(GameRule.SHOW_DAYS_PLAYED, d.getBoolean("showDaysPlayed"));
             gameRules.setGameRule(GameRule.SHOW_DEATH_MESSAGES, d.getBoolean("showDeathMessages"));
             gameRules.setGameRule(GameRule.SHOW_TAGS, d.getBoolean("showTags"));
             gameRules.setGameRule(GameRule.SPAWN_RADIUS, d.getInt("spawnRadius"));
             gameRules.setGameRule(GameRule.TNT_EXPLODES, d.getBoolean("tntExplodes"));
-            gameRules.setGameRule(GameRule.PROJECTILES_CAN_BREAK_BLOCKS, d.getBoolean("projectilesCanBreakBlocks"));
             gameRules.setGameRule(GameRule.TNT_EXPLOSION_DROP_DECAY, d.getBoolean("tntExplosionDropDecay"));
-            gameRules.setGameRule(GameRule.LOCATOR_BAR, d.getBoolean("locatorBar"));
 
             Map<String, Boolean> experimentMap = new HashMap<>();
             for (Map.Entry<String, Tag> entry : experiments.getTags().entrySet()) {
@@ -762,7 +808,7 @@ public class LevelDBProvider implements LevelProvider {
         } catch (FileNotFoundException e) {
             log.error("The level.dat file does not exist!");
         }
-        throw new RuntimeException("level.dat is null!");
+        throw new IllegalStateException("level.dat is null!");
     }
 
     private static CompoundTag createWorldDataNBT(LevelDat worldData) {
@@ -853,24 +899,30 @@ public class LevelDBProvider implements LevelProvider {
         levelDat.put("doTileDrops", worldData.getGameRules().getGameRules().get(GameRule.DO_TILE_DROPS).getTag());
         levelDat.put("doWeatherCycle", worldData.getGameRules().getGameRules().get(GameRule.DO_WEATHER_CYCLE).getTag());
         levelDat.put("drowningDamage", worldData.getGameRules().getGameRules().get(GameRule.DROWNING_DAMAGE).getTag());
+        levelDat.put("experimentalGameplay", worldData.getGameRules().getGameRules().get(GameRule.EXPERIMENTAL_GAMEPLAY).getTag());
         levelDat.put("fallDamage", worldData.getGameRules().getGameRules().get(GameRule.FALL_DAMAGE).getTag());
         levelDat.put("fireDamage", worldData.getGameRules().getGameRules().get(GameRule.FIRE_DAMAGE).getTag());
         levelDat.put("freezeDamage", worldData.getGameRules().getGameRules().get(GameRule.FREEZE_DAMAGE).getTag());
         levelDat.put("functionCommandLimit", worldData.getGameRules().getGameRules().get(GameRule.FUNCTION_COMMAND_LIMIT).getTag());
         levelDat.put("keepInventory", worldData.getGameRules().getGameRules().get(GameRule.KEEP_INVENTORY).getTag());
+        levelDat.put("locatorBar", worldData.getGameRules().getGameRules().get(GameRule.LOCATOR_BAR).getTag());
         levelDat.put("maxCommandChainLength", worldData.getGameRules().getGameRules().get(GameRule.MAX_COMMAND_CHAIN_LENGTH).getTag());
         levelDat.put("mobGriefing", worldData.getGameRules().getGameRules().get(GameRule.MOB_GRIEFING).getTag());
         levelDat.put("naturalRegeneration", worldData.getGameRules().getGameRules().get(GameRule.NATURAL_REGENERATION).getTag());
+        levelDat.put("playersSleepingPercentage", worldData.getGameRules().getGameRules().get(GameRule.PLAYERS_SLEEPING_PERCENTAGE).getTag());
+        levelDat.put("projectilesCanBreakBlocks", worldData.getGameRules().getGameRules().get(GameRule.PROJECTILES_CAN_BREAK_BLOCKS).getTag());
         levelDat.put("pvp", worldData.getGameRules().getGameRules().get(GameRule.PVP).getTag());
+        levelDat.put("randomTickSpeed", worldData.getGameRules().getGameRules().get(GameRule.RANDOM_TICK_SPEED).getTag());
+        levelDat.put("recipesUnlock", worldData.getGameRules().getGameRules().get(GameRule.RECIPES_UNLOCK).getTag());
         levelDat.put("respawnBlocksExplode", worldData.getGameRules().getGameRules().get(GameRule.RESPAWN_BLOCKS_EXPLODE).getTag());
         levelDat.put("sendCommandFeedback", worldData.getGameRules().getGameRules().get(GameRule.SEND_COMMAND_FEEDBACK).getTag());
         levelDat.put("showBorderEffect", worldData.getGameRules().getGameRules().get(GameRule.SHOW_BORDER_EFFECT).getTag());
         levelDat.put("showCoordinates", worldData.getGameRules().getGameRules().get(GameRule.SHOW_COORDINATES).getTag());
+        levelDat.put("showDaysPlayed", worldData.getGameRules().getGameRules().get(GameRule.SHOW_DAYS_PLAYED).getTag());
         levelDat.put("showDeathMessages", worldData.getGameRules().getGameRules().get(GameRule.SHOW_DEATH_MESSAGES).getTag());
         levelDat.put("showTags", worldData.getGameRules().getGameRules().get(GameRule.SHOW_TAGS).getTag());
         levelDat.put("spawnRadius", worldData.getGameRules().getGameRules().get(GameRule.SPAWN_RADIUS).getTag());
         levelDat.put("tntExplodes", worldData.getGameRules().getGameRules().get(GameRule.TNT_EXPLODES).getTag());
-        levelDat.put("projectilesCanBreakBlocks", worldData.getGameRules().getGameRules().get(GameRule.PROJECTILES_CAN_BREAK_BLOCKS).getTag());
         levelDat.put("tntExplosionDropDecay", worldData.getGameRules().getGameRules().get(GameRule.TNT_EXPLOSION_DROP_DECAY).getTag());
 
         //PNX Custom field

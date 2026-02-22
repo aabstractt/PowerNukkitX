@@ -483,7 +483,7 @@ public abstract class Block extends Position implements Metadatable, AxisAligned
             }
         }
 
-    return isSideFull(side);
+        return isSideFull(side);
     }
 
     // https://minecraft.wiki/w/Opacity#Lighting
@@ -623,13 +623,45 @@ public abstract class Block extends Position implements Metadatable, AxisAligned
 
     public BlockColor getColor() {
         if (color != null) return color;
-        else color = VANILLA_BLOCK_COLOR_MAP.get(this.blockstate.blockStateHash());
+        CustomBlockDefinition def = getCustomDefinition();
+        if (def != null) {
+            String hex = def.nbt().getCompound("components").getString("minecraft:map_color");
+            color = parseHexColor(hex);
+            color.applyTint(level.getBiomeId(getFloorX(), getFloorY(), getFloorZ()));
+            return color;
+        }
+
+        color = VANILLA_BLOCK_COLOR_MAP.get(this.blockstate.blockStateHash());
         if (color == null) {
-            log.error("Failed to get color of block " + getName());
-            log.error("Current block state hash: " + this.blockstate.blockStateHash());
+            log.error("Failed to get color of block {}", getName());
+            log.error("Current block state hash: {}", this.blockstate.blockStateHash());
             color = BlockColor.VOID_BLOCK_COLOR;
         }
         return color;
+    }
+
+    private static BlockColor parseHexColor(String hex) {
+        if (hex == null || hex.isEmpty()) return new BlockColor(0xFF, 0xFF, 0xFF, 0xFF);
+        String s = hex.charAt(0) == '#' ? hex.substring(1) : hex;
+        long val = Long.parseLong(s, 16);
+
+        if (s.length() == 6) {
+            return new BlockColor(
+                (int) ((val >> 16) & 0xFF),
+                (int) ((val >> 8) & 0xFF),
+                (int) (val & 0xFF),
+                0xFF
+            );
+        }
+        if (s.length() == 8) {
+            return new BlockColor(
+                (int) ((val >> 16) & 0xFF),
+                (int) ((val >> 8) & 0xFF),
+                (int) (val & 0xFF),
+                (int) ((val >> 24) & 0xFF)
+            );
+        }
+        return new BlockColor(0xFF, 0xFF, 0xFF, 0xFF);
     }
 
     public String getName() {
@@ -680,7 +712,7 @@ public abstract class Block extends Position implements Metadatable, AxisAligned
     }
 
     public boolean isAir() {
-        return this.blockstate == BlockAir.PROPERTIES.getDefaultState();
+        return this.blockstate == BlockAir.STATE;
     }
 
     public BlockState getBlockState() {
@@ -1686,7 +1718,7 @@ public abstract class Block extends Position implements Metadatable, AxisAligned
             clonedBlock.position(pos);
             CompoundTag tag = holder.getBlockEntity().getCleanedNBT();
             //方块实体要求direct=true
-            return BlockEntityHolder.setBlockAndCreateEntity((BlockEntityHolder<?>) clonedBlock, true, update, tag) != null;
+            return BlockEntityHolder.setBlockAndCreateEntity((BlockEntityHolder<?>) clonedBlock, false, update, tag) != null;
         } else {
             return pos.level.setBlock(pos, this.layer, this.clone(), true, update);
         }

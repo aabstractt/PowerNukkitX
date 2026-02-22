@@ -130,6 +130,9 @@ public interface PacketHandler {
     default void handle(ContainerRegistryCleanupPacket pk) {
     }
 
+    default void handle(CorrectPlayerMovePredictionPacket pk) {
+    }
+
     default void handle(ContainerSetDataPacket pk) {
     }
 
@@ -591,5 +594,32 @@ public interface PacketHandler {
     }
 
     default void handle(StructureTemplateDataResponsePacket pk) {
+    }
+
+    default void handle(ServerboundDataStorePacket pk) {
+    }
+
+    default void handle(ClientboundDataDrivenUICloseAllScreensPacket pk) {
+    }
+
+    default void handle(ClientboundDataDrivenUIReloadPacket pk) {
+    }
+
+    default void handle(ClientboundDataDrivenUIShowScreenPacket pk) {
+    }
+
+    default void handle(ClientboundTextureShiftPacket pk) {
+    }
+
+    default void handle(VoxelShapesPacket pk) {
+    }
+
+    default void handle(CameraAimAssistActorPriorityPacket pk) {
+    }
+
+    default void handle(ClientboundDataStorePacket pk) {
+    }
+
+    default void handle(GraphicsParameterOverridePacket pk) {
     }
 }

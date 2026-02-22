@@ -11,6 +11,7 @@ import cn.nukkit.entity.custom.CustomEntityDefinition.Meta;
 import cn.nukkit.entity.data.EntityDataMap;
 import cn.nukkit.entity.data.EntityDataTypes;
 import cn.nukkit.entity.data.EntityFlag;
+import cn.nukkit.entity.effect.Effect;
 import cn.nukkit.entity.effect.EffectType;
 import cn.nukkit.entity.projectile.EntityProjectile;
 import cn.nukkit.entity.weather.EntityWeather;
@@ -20,8 +21,10 @@ import cn.nukkit.event.entity.EntityDamageByEntityEvent;
 import cn.nukkit.event.entity.EntityDamageEvent;
 import cn.nukkit.event.entity.EntityDamageEvent.DamageCause;
 import cn.nukkit.event.entity.EntityDeathEvent;
+import cn.nukkit.inventory.EntityHandItem;
 import cn.nukkit.inventory.HumanInventory;
 import cn.nukkit.inventory.InventoryHolder;
+import cn.nukkit.inventory.InventorySlice;
 import cn.nukkit.item.Item;
 import cn.nukkit.item.ItemShield;
 import cn.nukkit.item.ItemTurtleHelmet;
@@ -34,13 +37,13 @@ import cn.nukkit.nbt.tag.FloatTag;
 import cn.nukkit.network.protocol.AnimatePacket;
 import cn.nukkit.network.protocol.EntityEventPacket;
 import cn.nukkit.utils.TickCachedBlockIterator;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
-
 
 public abstract class EntityLiving extends Entity implements EntityDamageable {
     public final static float DEFAULT_SPEED = 0.1f;
@@ -124,18 +127,74 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
     }
 
     public boolean hasLineOfSight(Entity target) {
+        return hasLineOfSight(target, 0.0);
+    }
+
+    public boolean hasLineOfSight(Entity target, double thickness) {
         if (this.level != target.level) return false;
 
+        final boolean includeLiquidBlocks = false;
+        final boolean includePassableBlocks = false;
+        final double step = 0.25;
+
+        final Vector3 selfPos = this.getPosition();
+        final double selfEye = this.getEyeHeight();
+        final double selfChest = this.getHeight() * 0.60;
+
         Vector3[] fromPoints = new Vector3[] {
-            this.getPosition().add(0, this.getEyeHeight(), 0),    // eye level
-            this.getPosition().add(0, this.getHeight() * 0.6, 0)  // upper chest
+            selfPos.add(0, selfEye + 0.001, 0),
+            selfPos.add(0, selfChest + 0.001, 0),
         };
-        Vector3 to = target.getPosition().add(0, target.getHeight() * 0.6, 0); // target chest
+
+        final double tH = Math.max(0.0, target.getHeight());
+        final double tEye = Math.max(0.0, target.getEyeHeight());
+        final Vector3 tBase = target.getPosition();
+
+        Vector3[] toPoints = new Vector3[] {
+            tBase.add(0, Math.max(0.2 * tH, 0.25), 0),
+            tBase.add(0, Math.max(0.5 * tH, 0.5),  0),
+            tBase.add(0, Math.max(0.8 * tH, 0.75), 0),
+            tBase.add(0, Math.max(tEye, 0.9),      0),
+        };
+
+        boolean useCorridor = thickness > 0.0;
 
         for (Vector3 from : fromPoints) {
-            List<Block> blocks = this.level.raycastBlocks(from, to, true, false, 0.25);
-            boolean blocked = blocks.stream().anyMatch(b -> !b.isTransparent() && b.getBoundingBox() != null);
-            if (!blocked) return true;
+            for (Vector3 to : toPoints) {
+                Vector3 dir = to.subtract(from);
+                if (dir.lengthSquared() < 1e-6) continue;
+
+                if (!useCorridor) {
+                    List<Block> visited = this.level.raycastBlocks(from, to, true, false, step, false, false, true);
+                    boolean blocked = !visited.isEmpty() && this.level.blocksBlockSight(visited.getLast(), includeLiquidBlocks, includePassableBlocks);
+                    if (!blocked) return true;
+                    continue;
+                }
+
+                Vector3 right = new Vector3(-dir.z, 0, dir.x);
+                if (right.lengthSquared() < 1e-6) right = new Vector3(1, 0, 0);
+                right = right.normalize().multiply(thickness);
+
+                Vector3 up = new Vector3(0, thickness, 0);
+
+                Vector3[] offsets = new Vector3[] {
+                    right, right.multiply(-1),
+                    up,    up.multiply(-1),
+                };
+
+                boolean allClear = true;
+                for (Vector3 o : offsets) {
+                    Vector3 f = from.add(o.x, o.y, o.z);
+                    Vector3 t = to.add(o.x, o.y, o.z);
+
+                    List<Block> visited = this.level.raycastBlocks(f, t, true, false, step, false, false, true);
+                    boolean blocked = !visited.isEmpty() && this.level.blocksBlockSight(visited.getLast(), includeLiquidBlocks, includePassableBlocks);
+
+                    if (blocked) { allClear = false; break; }
+                }
+
+                if (allClear) return true;
+            }
         }
         return false;
     }
@@ -218,6 +277,20 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
             return;
         }
 
+        if(this instanceof Player player) {
+            float totalReduction = 0.0f;
+
+            InventorySlice armorInventory = player.getInventory().getArmorInventory();
+
+            for (Item item : armorInventory.getContents().values()){
+                if(!item.isNull()){
+                    totalReduction += item.getKnockbackResistance();
+                }
+            }
+
+            base *= (1.0 - totalReduction);
+        }
+
         float resist = this.getKnockbackResistance();
         base *= (1.0 - resist);
         if (base <= 0) {
@@ -248,19 +321,24 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
             return;
         }
         super.kill();
-        EntityDeathEvent ev = new EntityDeathEvent(this, this.getDrops());
+        Item weapon = Item.AIR;
+        if (this.getLastDamageCause() instanceof EntityDamageByEntityEvent event
+                && event.getDamager() instanceof EntityHandItem handItem) {
+            weapon = handItem.getItemInHand();
+        }
+
+        EntityDeathEvent ev = new EntityDeathEvent(this, this.getDrops(weapon));
         this.server.getPluginManager().callEvent(ev);
 
         var manager = this.server.getScoreboardManager();
-        //测试环境中此项会null，所以说需要判空下
+        // This will be null in the test environment, so it is necessary to check for null values.
         if (manager != null) manager.onEntityDead(this);
-
         if (this.level.getGameRules().getBoolean(GameRule.DO_ENTITY_DROPS)) {
             for (Item item : ev.getDrops()) {
                 this.getLevel().dropItem(this, item);
             }
-            this.getLevel().dropExpOrb(this, getExperienceDrops());
         }
+        this.getLevel().dropExpOrb(this, getExperienceDrops());
     }
 
     @Override
@@ -359,10 +437,21 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
     }
 
     /**
-     * Defines the drops after the entity's death
+     * Defines the drops after the entity's death without looting
+     * @deprecated Use {@link #getDrops(Item)}
      */
+    @Deprecated
     public Item[] getDrops() {
         return Item.EMPTY_ARRAY;
+    }
+
+    /**
+     * Defines the drops of the entity adjusted with the enchantments of the item
+     * @param weapon - The weapon that was used to kill the entity.
+     * @since 12/12/2025
+     */
+    public Item[] getDrops(@NotNull Item weapon) {
+        return this.getDrops();
     }
 
     public Integer getExperienceDrops() {
@@ -450,7 +539,7 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
         return 1.0f;
     }
 
-    /** The radius of the area of blocks the entity will attempt to stay within around a target. */
+    /** The radius of the area blocks the entity will attempt to stay within around a target. */
     public int getFollowRadius() {
         if (isCustomEntity()) {
             return meta().getFollowRange(CustomEntityComponents.FOLLOW_RANGE).radius();
@@ -548,8 +637,29 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
     }
 
     public void setBlocking(boolean value) {
-        this.setDataFlagExtend(EntityFlag.BLOCKING, value, false);
-        this.setDataFlagExtend(EntityFlag.TRANSITION_BLOCKING, value, true);
+        EnumSet<EntityFlag> ext = this.getEntityDataMap().getOrCreateFlags2();
+
+        boolean changed;
+        if (value) {
+            changed = ext.add(EntityFlag.BLOCKING);
+        } else {
+            changed = ext.remove(EntityFlag.BLOCKING);
+        }
+
+        if (!changed) return;
+
+        this.getEntityDataMap().put(EntityDataTypes.FLAGS_2, ext);
+
+        EnumSet<EntityFlag> wire = EnumSet.copyOf(ext);
+        if (value) {
+            wire.add(EntityFlag.TRANSITION_BLOCKING);
+        } else {
+            wire.remove(EntityFlag.TRANSITION_BLOCKING);
+        }
+
+        EntityDataMap delta = new EntityDataMap();
+        delta.put(EntityDataTypes.FLAGS_2, wire);
+        sendData(this.hasSpawned.values().toArray(Player.EMPTY_ARRAY), delta);
     }
 
     @Override
@@ -581,5 +691,36 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
 
     public int getAttackTimeBefore() {
         return attackTimeBefore;
+    }
+
+    public void recalcMovementSpeedFromEffects() {
+        float base = this.getDefaultSpeed() * this.getSpeedMultiplier();
+        float mul = 1.0f;
+
+        Effect speed = this.getEffect(EffectType.SPEED);
+        int speedLvl = (speed != null) ? (Math.max(0, speed.getAmplifier()) + 1) : 0;
+
+        Effect slow = this.getEffect(EffectType.SLOWNESS);
+        int slowLvl = (slow != null) ? (Math.max(0, slow.getAmplifier()) + 1) : 0;
+
+        if (slowLvl >= 7) {
+            mul = 0.0f;
+        } else {
+            if (speedLvl > 0) {
+                mul *= (1.0f + 0.20f * speedLvl);
+            }
+            if (slowLvl > 0) {
+                mul *= Math.max(0.0f, 1.0f - 0.15f * slowLvl);
+            }
+        }
+
+        if (this instanceof Player p && p.isSprinting()) mul *= 1.3f;
+        float newSpeed = base * mul;
+
+        if (this instanceof Player) {
+            ((Player) this).setMovementSpeed(newSpeed, true);
+        } else {
+            this.setMovementSpeed(newSpeed);
+        }
     }
 }

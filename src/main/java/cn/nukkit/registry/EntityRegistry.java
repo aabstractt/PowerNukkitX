@@ -2,6 +2,7 @@ package cn.nukkit.registry;
 
 import cn.nukkit.Nukkit;
 import cn.nukkit.entity.Entity;
+import cn.nukkit.entity.EntityFakeInventory;
 import cn.nukkit.entity.EntityID;
 import cn.nukkit.entity.custom.CustomEntity;
 import cn.nukkit.entity.custom.CustomEntityDefinition;
@@ -59,6 +60,8 @@ public class EntityRegistry implements EntityID, IRegistry<EntityRegistry.Entity
     @Override
     public void init() {
         if (isLoad.getAndSet(true)) return;
+        registerInternal(new EntityDefinition(FAKE_INVENTORY, "", 9999, false, false), EntityFakeInventory.class);
+
         registerInternal(new EntityDefinition(CHICKEN, "", 10, true, true), EntityChicken.class);
         registerInternal(new EntityDefinition(COW, "", 11, true, true), EntityCow.class);
         registerInternal(new EntityDefinition(PIG, "", 12, true, true), EntityPig.class);
@@ -187,6 +190,11 @@ public class EntityRegistry implements EntityID, IRegistry<EntityRegistry.Entity
         registerInternal(new EntityDefinition(BOGGED, "", 144, true, true), EntityBogged.class);
         registerInternal(new EntityDefinition(CREAKING, "", 146, true, true), EntityCreaking.class);
         registerInternal(new EntityDefinition(HAPPY_GHAST, "", 147, true, true), EntityHappyGhast.class);
+        registerInternal(new EntityDefinition(COPPER_GOLEM, "", 148, true, true), EntityCopperGolem.class);
+        registerInternal(new EntityDefinition(NAUTILUS, "", 149, true, true), EntityNautilus.class);
+        registerInternal(new EntityDefinition(ZOMBIE_NAUTILUS, "", 150, true, true), EntityZombieNautilus.class);
+        registerInternal(new EntityDefinition(PARCHED, "", 151, true, true), EntityParched.class);
+        registerInternal(new EntityDefinition(CAMEL_HUSK, "", 152, true, true), EntityCamelHusk.class);
 
         registerSpawner(new SpawnRuleArmadillo());
         registerSpawner(new SpawnRuleAxolotl());
@@ -379,7 +387,7 @@ public class EntityRegistry implements EntityID, IRegistry<EntityRegistry.Entity
             try {
                 FAST_NEW.put(key.id, FastConstructor.create(value.getConstructor(IChunk.class, CompoundTag.class)));
             } catch (NoSuchMethodException e) {
-                throw new RuntimeException(e);
+                throw new RegisterException("The entity class " + value.getSimpleName() + " must have a constructor with parameters (IChunk, CompoundTag)!", e);
             }
             ID2RID.put(key.id, key.rid);
             RID2ID.put(key.rid, key.id);
@@ -410,7 +418,7 @@ public class EntityRegistry implements EntityID, IRegistry<EntityRegistry.Entity
             FastMemberLoader memberLoader = fastMemberLoaderCache.computeIfAbsent(plugin.getName(), p -> new FastMemberLoader(plugin.getPluginClassLoader()));
             FAST_NEW.put(key.id, FastConstructor.create(value.getConstructor(IChunk.class, CompoundTag.class), memberLoader, false));
         } catch (NoSuchMethodException e) {
-            throw new RuntimeException(e);
+            throw new RegisterException("The entity class " + value.getSimpleName() + " must have a constructor with parameters (IChunk, CompoundTag)!", e);
         }
         ID2RID.put(key.id, key.rid);
         RID2ID.put(key.rid, key.id);
@@ -452,7 +460,7 @@ public class EntityRegistry implements EntityID, IRegistry<EntityRegistry.Entity
                 }
             } catch (NoSuchFieldException ignored) {
             } catch (IllegalAccessException e) {
-                log.error("Failed to access PROPERTIES for custom entity: " + id, e);
+                log.error("Failed to access PROPERTIES for custom entity: {}", id, e);
             }
 
             if (def.hasSpawnEgg()) {
@@ -460,9 +468,9 @@ public class EntityRegistry implements EntityID, IRegistry<EntityRegistry.Entity
                 Registries.ITEM.registerSpawnEgg(eggId);
             }
         } catch (NoSuchMethodException e) {
-            throw new RegisterException(e);
+            throw new RegisterException("The entity class " + value.getSimpleName() + " must have a constructor with parameters (IChunk, CompoundTag)!", e);
         } catch (Throwable e) {
-            throw new RuntimeException(e);
+            throw new RegisterException(e);
         }
     }
 
@@ -529,7 +537,7 @@ public class EntityRegistry implements EntityID, IRegistry<EntityRegistry.Entity
         } catch (RegisterException e) {
             log.error("{}", e.getCause().getMessage());
         } catch (IllegalAccessException e) {
-            log.error("Failed to access PROPERTIES for: " + key.id(), e);
+            log.error("Failed to access PROPERTIES for: {}", key.id(), e);
         }
     }
 
@@ -563,6 +571,11 @@ public class EntityRegistry implements EntityID, IRegistry<EntityRegistry.Entity
             BufferedInputStream bis = new BufferedInputStream(inputStream);
             CompoundTag nbt = NBTIO.read(bis, ByteOrder.BIG_ENDIAN, true);
             ListTag<CompoundTag> list = nbt.getList("idlist", CompoundTag.class);
+
+            // Add fake inventory entity definition
+            EntityRegistry.EntityDefinition fakeEntityInventory = Registries.ENTITY.getEntityDefinition(EntityID.FAKE_INVENTORY);
+            list.add(fakeEntityInventory.toNBT());
+
             for (var customEntityDefinition : Registries.ENTITY.getCustomEntityDefinitions()) {
                 list.add(customEntityDefinition.toNBT());
             }

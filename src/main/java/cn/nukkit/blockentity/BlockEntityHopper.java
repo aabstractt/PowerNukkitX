@@ -219,6 +219,11 @@ public class BlockEntityHopper extends BlockEntitySpawnable implements BlockEnti
             return false;
         }
 
+        if(!isBlockEntityValid()) {
+            this.close();
+            return false;
+        }
+
         if (isOnTransferCooldown()) {
             this.transferCooldown--;
             return true;
@@ -376,6 +381,7 @@ public class BlockEntityHopper extends BlockEntitySpawnable implements BlockEnti
         Block blockSide = sidePos.getLevelBlock(false);
         if (blockSide.isAir()) return false;
         BlockEntity be = this.level.getBlockEntity(temporalVector.setComponentsAdding(this, side));
+
 
         //漏斗应该有主动向被锁住的漏斗推送物品的能力
         if (be instanceof BlockEntityHopper sideHopper && levelBlockState.isDefaultState() && !sideHopper.isDisabled() || !(be instanceof InventoryHolder) && !(blockSide instanceof BlockComposter)) {

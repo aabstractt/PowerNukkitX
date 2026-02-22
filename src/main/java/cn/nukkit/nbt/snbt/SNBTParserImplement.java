@@ -10,10 +10,7 @@ import cn.nukkit.nbt.snbt.ast.Root;
 import cn.nukkit.nbt.snbt.ast.Value;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.PrintStream;
-import java.io.Reader;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -94,24 +91,6 @@ public class SNBTParserImplement implements SNBTConstants {
     }
 
     /**
-     * Use the constructor that takes a #java.nio.files.Path or just
-     * a String (i.e. CharSequence) directly.
-     */
-    @Deprecated
-    public SNBTParserImplement(InputStream stream) {
-        this(new InputStreamReader(stream));
-    }
-
-    /**
-     * Use the constructor that takes a #java.nio.files.Path or just
-     * a String (i.e. CharSequence) directly.
-     */
-    @Deprecated
-    public SNBTParserImplement(Reader reader) {
-        this(new SNBTLexer("input", reader));
-    }
-
-    /**
      * Constructor with user supplied Lexer.
      */
     public SNBTParserImplement(SNBTLexer lexer) {
@@ -122,7 +101,7 @@ public class SNBTParserImplement implements SNBTConstants {
 
     // If the next token is cached, it returns that
     // Otherwise, it goes to the token_source, i.e. the Lexer.
-    final private Token nextToken(final Token tok) {
+    private Token nextToken(final Token tok) {
         Token result = token_source.getNextToken(tok);
         while (result.isUnparsed()) {
             result = token_source.getNextToken(result);
@@ -157,7 +136,7 @@ public class SNBTParserImplement implements SNBTConstants {
         return t;
     }
 
-    private final TokenType nextTokenType() {
+    private TokenType nextTokenType() {
         if (nextTokenType == null) {
             nextTokenType = nextToken(lastConsumedToken).getType();
         }
@@ -381,7 +360,7 @@ public class SNBTParserImplement implements SNBTConstants {
                 }
                 // Code for ZeroOrMore specified at SNBT.javacc:84:55
                 while (true) {
-                    if (!(nextTokenType() == COMMA)) break;
+                    if (nextTokenType() != COMMA) break;
                     // Code for RegexpRef specified at SNBT.javacc:84:56
                     consumeToken(COMMA);
                     if (nextTokenType() == BYTE) {
@@ -444,7 +423,7 @@ public class SNBTParserImplement implements SNBTConstants {
                 consumeToken(INTEGER);
                 // Code for ZeroOrMore specified at SNBT.javacc:87:43
                 while (true) {
-                    if (!(nextTokenType() == COMMA)) break;
+                    if (nextTokenType() != COMMA) break;
                     // Code for RegexpRef specified at SNBT.javacc:87:44
                     consumeToken(COMMA);
                     // Code for RegexpRef specified at SNBT.javacc:87:52
@@ -500,7 +479,7 @@ public class SNBTParserImplement implements SNBTConstants {
                 }
                 // Code for ZeroOrMore specified at SNBT.javacc:90:27
                 while (true) {
-                    if (!(nextTokenType() == COMMA)) break;
+                    if (nextTokenType() != COMMA) break;
                     // Code for RegexpRef specified at SNBT.javacc:90:28
                     consumeToken(COMMA);
                     // Code for NonTerminal specified at SNBT.javacc:90:36
@@ -961,13 +940,9 @@ public class SNBTParserImplement implements SNBTConstants {
         } finally {
             passedPredicate = passedPredicate449;
         }
-        if (hitFailure) return false;
-        if (remainingLookahead <= 0) {
-            return true;
-        }
+
         // Lookahead Code for RegexpRef specified at SNBT.javacc:84:100
-        if (!scanToken(CLOSE_BRACKET)) return false;
-        return true;
+        return !hitFailure && remainingLookahead <= 0 && scanToken(CLOSE_BRACKET);
     }
 
     // BuildProductionLookaheadMethod macro
@@ -1014,13 +989,8 @@ public class SNBTParserImplement implements SNBTConstants {
         } finally {
             passedPredicate = passedPredicate456;
         }
-        if (hitFailure) return false;
-        if (remainingLookahead <= 0) {
-            return true;
-        }
         // Lookahead Code for RegexpRef specified at SNBT.javacc:87:77
-        if (!scanToken(CLOSE_BRACKET)) return false;
-        return true;
+        return !hitFailure && remainingLookahead <= 0 && scanToken(CLOSE_BRACKET);
     }
 
     ArrayList<NonTerminalCall> parsingStack = new ArrayList<>();
@@ -1127,21 +1097,6 @@ public class SNBTParserImplement implements SNBTConstants {
 
     private Token handleUnexpectedTokenType(TokenType expectedType, Token nextToken) {
         throw new ParseException(this, nextToken, EnumSet.of(expectedType), parsingStack);
-    }
-
-    private class ParseState {
-        Token lastConsumed;
-        ArrayList<NonTerminalCall> parsingStack;
-        NodeScope nodeScope;
-
-        ParseState() {
-            this.lastConsumed = SNBTParserImplement.this.lastConsumedToken;
-            @SuppressWarnings("unchecked")
-            ArrayList<NonTerminalCall> parsingStack = (ArrayList<NonTerminalCall>) SNBTParserImplement.this.parsingStack.clone();
-            this.parsingStack = parsingStack;
-            this.nodeScope = currentNodeScope.clone();
-        }
-
     }
 
     private boolean buildTree = true;

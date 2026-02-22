@@ -3,6 +3,7 @@ package cn.nukkit.nbt.snbt;
 
 import java.io.IOException;
 import java.io.Reader;
+import java.io.UncheckedIOException;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
@@ -19,7 +20,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 
 public class SNBTLexer implements SNBTConstants {
-    static final private SNBTNfaData.NfaFunction[] nfaFunctions = SNBTNfaData.getFunctionTableMap(null);
+    static final private SNBTNfaData.NfaFunction[] nfaFunctions = SNBTNfaData.getFunctionTableMap();
     static final int DEFAULT_TAB_SIZE = 1;
     private int tabSize = DEFAULT_TAB_SIZE;
 
@@ -70,9 +71,6 @@ public class SNBTLexer implements SNBTConstants {
     // the current active NFA states in the core tokenization loop
     private BitSet nextStates = new BitSet(76), currentStates = new BitSet(76);
     EnumSet<TokenType> activeTokenTypes = EnumSet.allOf(TokenType.class);
-
-    {
-    }
 
     // Token types that are "regular" tokens that participate in parsing,
     // i.e. declared as TOKEN
@@ -129,34 +127,6 @@ public class SNBTLexer implements SNBTConstants {
         tokenOffsets = new BitSet(content.length() + 1);
         this.startingLine = startingLine;
         this.startingColumn = startingColumn;
-        switchTo(lexState);
-    }
-
-    /**
-     * Preferably use the constructor that takes a #java.nio.files.Path or simply a String,
-     * depending on your use case
-     */
-    @Deprecated
-    public SNBTLexer(Reader reader) {
-        this("input", reader, LexicalState.SNBT, 1, 1);
-    }
-
-    /**
-     * Preferably use the constructor that takes a #java.nio.files.Path or simply a String,
-     * depending on your use case
-     */
-    @Deprecated
-    public SNBTLexer(String inputSource, Reader reader) {
-        this(inputSource, reader, LexicalState.SNBT, 1, 1);
-    }
-
-    /**
-     * Preferably use the constructor that takes a #java.nio.files.Path or simply a String,
-     * depending on your use case
-     */
-    @Deprecated
-    public SNBTLexer(String inputSource, Reader reader, LexicalState lexState, int line, int column) {
-        this(inputSource, readToEnd(reader), lexState, line, column);
         switchTo(lexState);
     }
 
@@ -485,7 +455,7 @@ public class SNBTLexer implements SNBTConstants {
     }
 
     private void createLineOffsetsTable() {
-        if (content.length() == 0) {
+        if (content.isEmpty()) {
             this.lineOffsets = new int[0];
             return;
         }
@@ -521,7 +491,7 @@ public class SNBTLexer implements SNBTConstants {
     private static String mungeContent(CharSequence content, boolean preserveTabs, boolean preserveLines, boolean javaUnicodeEscape, boolean ensureFinalEndline) {
         if (preserveTabs && preserveLines && !javaUnicodeEscape) {
             if (ensureFinalEndline) {
-                if (content.length() == 0) {
+                if (content.isEmpty()) {
                     content = "\n";
                 } else {
                     int lastChar = content.charAt(content.length() - 1);
@@ -577,8 +547,7 @@ public class SNBTLexer implements SNBTConstants {
                     ++index;
                 }
             } else if (ch == '\t' && !preserveTabs) {
-                int spacesToAdd = DEFAULT_TAB_SIZE - col % DEFAULT_TAB_SIZE;
-                for (int i = 0; i < spacesToAdd; i++) {
+                for (int i = 0; i < DEFAULT_TAB_SIZE; i++) {
                     buf.append(' ');
                     col++;
                 }
@@ -589,7 +558,7 @@ public class SNBTLexer implements SNBTConstants {
             }
         }
         if (ensureFinalEndline) {
-            if (buf.length() == 0) {
+            if (buf.isEmpty()) {
                 return "\n";
             }
             char lastChar = buf.charAt(buf.length() - 1);
@@ -658,7 +627,7 @@ public class SNBTLexer implements SNBTConstants {
         try {
             return readFully(reader);
         } catch (IOException ioe) {
-            throw new RuntimeException(ioe);
+            throw new UncheckedIOException(ioe);
         }
     }
 

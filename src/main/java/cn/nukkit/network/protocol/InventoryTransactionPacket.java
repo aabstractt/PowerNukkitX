@@ -29,6 +29,7 @@ public class InventoryTransactionPacket extends DataPacket {
     public static final int USE_ITEM_ACTION_CLICK_BLOCK = 0;
     public static final int USE_ITEM_ACTION_CLICK_AIR = 1;
     public static final int USE_ITEM_ACTION_BREAK_BLOCK = 2;
+    public static final int USE_ITEM_ACTION_SPEAR_STAB = 3;
 
     public static final int RELEASE_ITEM_ACTION_RELEASE = 0; //bow shoot
     public static final int RELEASE_ITEM_ACTION_CONSUME = 1; //eat food, drink potion
@@ -126,7 +127,7 @@ public class InventoryTransactionPacket extends DataPacket {
                 this.transactionData = releaseItemData;
                 break;
             default:
-                throw new RuntimeException("Unknown transaction type " + this.transactionType);
+                throw new IllegalStateException("Unknown transaction type " + this.transactionType);
         }
     }
 
@@ -185,7 +186,7 @@ public class InventoryTransactionPacket extends DataPacket {
                 byteBuf.writeVector3f(releaseItemData.headRot.asVector3f());
                 break;
             default:
-                throw new RuntimeException("Unknown transaction type " + this.transactionType);
+                throw new IllegalStateException("Unknown transaction type " + this.transactionType);
         }
     }
 

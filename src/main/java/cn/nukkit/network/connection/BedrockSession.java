@@ -4,7 +4,9 @@ import cn.nukkit.Player;
 import cn.nukkit.PlayerHandle;
 import cn.nukkit.Server;
 import cn.nukkit.command.Command;
+import cn.nukkit.command.data.CommandData;
 import cn.nukkit.command.data.CommandDataVersions;
+import cn.nukkit.command.data.CommandOverload;
 import cn.nukkit.event.player.PlayerCreationEvent;
 import cn.nukkit.event.server.DataPacketDecodeEvent;
 import cn.nukkit.event.server.DataPacketReceiveEvent;
@@ -39,6 +41,7 @@ import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.util.internal.PlatformDependent;
 import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.jetbrains.annotations.ApiStatus;
@@ -75,11 +78,11 @@ public class BedrockSession {
     private InetSocketAddress address;
     @Getter
     protected boolean authenticated = false;
+    @Getter @Setter
+    protected int protocolVersion;
 
     /* ---------------- Pacing heavy packets, reduce bursting and esure client sync ------------- */
     private final boolean pacingEnabled;
-    private final int pacingFlushIntervalMillis;
-    private final int pacingMaxBytesPerSecond;
     private final OutboundScheduler scheduler;
 
     public BedrockSession(BedrockPeer peer, int subClientId) {
@@ -102,13 +105,13 @@ public class BedrockSession {
         /* ---- Load pacing settings safely ---- */
         PacingConfig pc = loadPacingConfigSafely();
         this.pacingEnabled = pc.enabled;
-        this.pacingFlushIntervalMillis = pc.flushMs;
-        this.pacingMaxBytesPerSecond = pc.maxBytesPerSec;
+        int pacingFlushIntervalMillis = pc.flushMs;
+        int pacingMaxBytesPerSecond = pc.maxBytesPerSec;
         this.scheduler = new OutboundScheduler(
-                this.pacingMaxBytesPerSecond,
+                pacingMaxBytesPerSecond,
                 1200,
                 256,
-                this.pacingFlushIntervalMillis
+                pacingFlushIntervalMillis
         );
 
         var cfg = new StateMachineConfig<SessionState, SessionState>();
@@ -446,7 +449,7 @@ public class BedrockSession {
         log.debug("Sending spawn notification, waiting for spawn response");
         var state = this.machine.getState();
         if (!state.equals(SessionState.PRE_SPAWN)) {
-            throw new IllegalStateException("attempt to notifyTerrainReady when the state is " + state.name());
+            throw new IllegalStateException("Attempted to use notifyTerrainReady when the state was " + state.name());
         }
         handle.doFirstSpawn();
     }
@@ -549,10 +552,49 @@ public class BedrockSession {
             }
         }
         if (count > 0) {
-            //TODO: structure checking
-            pk.commands = data;
-            this.sendPacket(pk);
+            Map<String, CommandDataVersions> filtered = getStringCommandDataVersionsMap(data);
+
+            if (!filtered.isEmpty()) {
+                pk.commands = filtered;
+                this.sendPacket(pk);
+            }
         }
+
+    }
+
+    private @NotNull Map<String, CommandDataVersions> getStringCommandDataVersionsMap(Map<String, CommandDataVersions> data) {
+        Map<String, CommandDataVersions> filtered = new HashMap<>();
+
+        for (Map.Entry<String, CommandDataVersions> entry : data.entrySet()) {
+            CommandDataVersions versions = entry.getValue();
+            if (versions == null) continue;
+
+            if (versions.versions == null || versions.versions.isEmpty()) continue;
+
+            boolean valid = false;
+
+            for (CommandData v : versions.versions) {
+                if (v == null) continue;
+                if (v.overloads == null || v.overloads.isEmpty()) continue;
+
+                boolean overloadValid = false;
+                for (CommandOverload overload : v.overloads.values()) {
+                    if (overload == null) continue;
+
+                    overloadValid = true;
+                }
+
+                if (overloadValid) {
+                    valid = true;
+                    break;
+                }
+            }
+
+            if (valid) {
+                filtered.put(entry.getKey(), versions);
+            }
+        }
+        return filtered;
     }
 
     public void syncCraftingData() {

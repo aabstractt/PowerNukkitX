@@ -49,13 +49,19 @@ public class EntityChestBoat extends EntityBoat implements InventoryHolder {
     }
 
     @Override
+    public boolean openInventory(Player player) {
+        player.addWindow(getInventory());
+        return true;
+    }
+
+    @Override
     public boolean onInteract(Player player, Item item, Vector3 clickedPos) {
         if (player.isSneaking()) {
             player.addWindow(this.inventory);
             return false;
         }
 
-        if (this.passengers.size() >= 1 || getWaterLevel() < -SINKING_DEPTH) {
+        if (!this.passengers.isEmpty() || getWaterLevel() < -SINKING_DEPTH) {
             return false;
         }
 
@@ -83,7 +89,7 @@ public class EntityChestBoat extends EntityBoat implements InventoryHolder {
 
         addEntity.links = new EntityLink[this.passengers.size()];
         for (int i = 0; i < addEntity.links.length; i++) {
-            addEntity.links[i] = new EntityLink(this.getId(), this.passengers.get(i).getId(), i == 0 ? EntityLink.Type.RIDER : EntityLink.Type.PASSENGER, false, false);
+            addEntity.links[i] = new EntityLink(this.getId(), this.passengers.get(i).getId(), i == 0 ? EntityLink.Type.RIDER : EntityLink.Type.PASSENGER, false, false, 0f);
         }
 
         return addEntity;

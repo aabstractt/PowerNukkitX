@@ -69,4 +69,8 @@ public class GameplaySettings extends OkaeriConfig {
     EnderPearlSettings enderPearl = new EnderPearlSettings();
     @Comment("nukkit.server.settings.gameplaysettings.snowBall")
     SnowballSettings snowBall = new SnowballSettings();
+    @Comment("pnx.settings.gameplay.enableEdu")
+    boolean enableEducation = false;
+    @Comment("pnx.settings.gameplay.muteEmoteAnnouncements")
+    boolean muteEmoteAnnouncements = false;
 }

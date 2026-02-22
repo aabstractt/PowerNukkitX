@@ -10,7 +10,7 @@ import java.util.stream.Collectors;
 
 
 /**
- * @implNote This is not an official protocol object. This was added by us for easier use on our side.
+ * @implNote This is not an official protocol object. We added this for easier use on our side.
  */
 public class BiomeDefinition implements IBiomeDefinitionListObject {
 
@@ -29,6 +29,10 @@ public class BiomeDefinition implements IBiomeDefinitionListObject {
 
     public Set<String> getTags() {
         return Arrays.stream(data.tags.orElse(new Short[0])).map(Registries.BIOME::getFromBiomeStringList).collect(Collectors.toSet());
+    }
+
+    public int getId() {
+        return Registries.BIOME.getBiomeId(this.getName());
     }
 
     @Override

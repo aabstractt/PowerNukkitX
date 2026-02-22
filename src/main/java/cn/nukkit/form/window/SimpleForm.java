@@ -49,6 +49,14 @@ public class SimpleForm extends Form<SimpleResponse> {
         return this;
     }
 
+    public SimpleForm addElements(ElementSimple... elements) {
+        for (ElementSimple element : elements) {
+            this.addElement(element);
+        }
+
+        return this;
+    }
+
     public SimpleForm addButton(ElementButton element, Consumer<Player> callback) {
         this.elements.put(element, callback);
         return this;
@@ -195,7 +203,7 @@ public class SimpleForm extends Form<SimpleResponse> {
             clickedId = Integer.parseInt(formData);
         } catch (Exception ignored) {}
 
-        if (entries.length < clickedId || clickedId == -1) {
+        if (entries.length <= clickedId || clickedId == -1) {
             return null;
         }
 

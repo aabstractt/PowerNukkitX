@@ -8,10 +8,10 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.UnmodifiableView;
 
-import java.awt.*;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -22,6 +22,7 @@ import java.util.Set;
  *
  * @author Cool_Loong
  */
+@Slf4j
 public final class BlockStateRegistry implements IRegistry<Integer, BlockState, BlockState> {
     private static final Int2ObjectOpenHashMap<BlockState> REGISTRY = new Int2ObjectOpenHashMap<>();
 
@@ -34,7 +35,7 @@ public final class BlockStateRegistry implements IRegistry<Integer, BlockState, 
                 JsonObject entry = blockStateData.get(i).getAsJsonObject();
                 int hash = entry.get("blockStateHash").getAsInt();
                 String name = entry.get("name").getAsString();
-                if(BlockRegistry.skipBlockSet.contains(name)) continue;
+                if(BlockRegistry.shouldSkip(name)) continue; //Skip blocks
                 BlockState state = Registries.BLOCKSTATE.get(hash);
                 if(state == null) {
                     Server.getInstance().getLogger().alert(name + " (" + hash + ") was not a part of block_states.json.");
@@ -99,7 +100,7 @@ public final class BlockStateRegistry implements IRegistry<Integer, BlockState, 
         try {
             register(value);
         } catch (RegisterException e) {
-            throw new RuntimeException(e);
+            log.error("Failed to register block state: {}", value, e);
         }
     }
 }

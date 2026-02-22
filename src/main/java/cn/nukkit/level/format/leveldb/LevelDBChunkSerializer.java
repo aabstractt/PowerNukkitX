@@ -36,6 +36,7 @@ import org.iq80.leveldb.WriteBatch;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -70,7 +71,7 @@ public class LevelDBChunkSerializer {
                 serializeBlockTicks(unsafeChunk);
                 writeBatch.put(LevelDBKeyUtil.PNX_EXTRA_DATA.getKey(unsafeChunk.getX(), unsafeChunk.getZ(), unsafeChunk.getDimensionData()), NBTIO.write(unsafeChunk.getExtraData()));
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                throw new UncheckedIOException(e);
             }
         });
 
@@ -198,7 +199,7 @@ public class LevelDBChunkSerializer {
                                 section = new ChunkSection((byte) ySection);
                             } else {
                                 BlockPalette[] palettes = new BlockPalette[layers];
-                                Arrays.fill(palettes, new BlockPalette(BlockAir.PROPERTIES.getDefaultState(), new ReferenceArrayList<>(16), BitArrayVersion.V2));
+                                Arrays.fill(palettes, new BlockPalette(BlockAir.STATE, new ReferenceArrayList<>(16), BitArrayVersion.V2));
                                 section = new ChunkSection((byte) ySection, palettes);
                             }
                             for (int layer = 0; layer < layers; layer++) {
@@ -308,7 +309,7 @@ public class LevelDBChunkSerializer {
                     blockEntityTags.add(NBTIO.read(stream, ByteOrder.LITTLE_ENDIAN));
                 }
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                throw new UncheckedIOException(e);
             }
             builder.blockEntities(blockEntityTags);
         }
@@ -322,7 +323,7 @@ public class LevelDBChunkSerializer {
                 entityTags.add(NBTIO.read(stream, ByteOrder.LITTLE_ENDIAN));
             }
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new UncheckedIOException(e);
         }
         if (pnxExtraData == null) {
             db.delete(key);
@@ -348,7 +349,7 @@ public class LevelDBChunkSerializer {
                 writeBatch.put(key, Utils.convertByteBuf2Array(tileBuffer));
             }
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new UncheckedIOException(e);
         } finally {
             tileBuffer.release();
         }
@@ -369,7 +370,7 @@ public class LevelDBChunkSerializer {
                 writeBatch.put(key, Utils.convertByteBuf2Array(entityBuffer));
             }
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new UncheckedIOException(e);
         } finally {
             entityBuffer.release();
         }
@@ -429,7 +430,8 @@ public class LevelDBChunkSerializer {
             case BlockID.DAYLIGHT_DETECTOR, BlockID.DAYLIGHT_DETECTOR_INVERTED,
                  BlockID.REDSTONE_WIRE, BlockID.REDSTONE_TORCH,
                  BlockID.POWERED_REPEATER, BlockID.UNPOWERED_REPEATER,
-                 BlockID.POWERED_COMPARATOR, BlockID.UNPOWERED_COMPARATOR -> {
+                 BlockID.POWERED_COMPARATOR, BlockID.UNPOWERED_COMPARATOR,
+                 BlockID.PISTON, BlockID.STICKY_PISTON -> {
                 CompoundTag tag = new CompoundTag()
                     .putInt("x", x + (cx << 4))
                     .putInt("y", (sectionY << 4) + y)

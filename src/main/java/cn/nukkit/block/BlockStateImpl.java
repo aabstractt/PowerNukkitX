@@ -17,9 +17,8 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Allay Project 12/15/2023
- *
- * @author Cool_Loong
+ * @author Cool_Loong (Allay Project)
+ * @since 12/15/2023
  */
 @Slf4j
 public record BlockStateImpl(String identifier,
@@ -102,7 +101,7 @@ public record BlockStateImpl(String identifier,
             }
         }
 
-        log.debug("Property " + p + " is not supported by this block " + this.identifier);
+        log.debug("Property {} is not supported by this block {}", p, this.identifier);
         return null;
     }
 

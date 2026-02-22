@@ -1,5 +1,7 @@
 package cn.nukkit.network.connection;
 
+import cn.nukkit.network.NetworkInterface;
+import cn.nukkit.network.process.NetworkState;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import lombok.Data;
@@ -53,7 +55,23 @@ public class BedrockPong {
         return string == null ? "" : string;
     }
 
-    public void update() {
-        this.channel.config().setAdvertisement(this.toByteBuf());
+    /**
+     * Updates the advertisement for the Bedrock server channel.
+     * Defensive checks are applied to avoid null pointer exceptions and invalid states.
+     *
+     * @param network the network instance to check state
+     */
+    public void update(NetworkInterface network) {
+        if (network == null) {
+            return;
+        }
+        if (channel == null) {
+            return;
+        }
+        if (network.getState() == NetworkState.STARTING || network.getState() == NetworkState.STOPPING) {
+            return;
+        }
+
+        channel.config().setAdvertisement(this.toByteBuf());
     }
 }

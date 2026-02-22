@@ -272,7 +272,6 @@ public class Long2ObjectNonBlockingMap<TypeV>
      *
      * @param val a value to search for
      * @return <tt>true</tt> if this map maps one or more keys to the specified value
-     * @throws NullPointerException if the specified value is null
      */
     public boolean contains(Object val) {
         return containsValue(val);
@@ -287,7 +286,6 @@ public class Long2ObjectNonBlockingMap<TypeV>
      * @param val value to be associated with the specified key
      * @return the previous value associated with <tt>key</tt>, or
      * <tt>null</tt> if there was no mapping for <tt>key</tt>
-     * @throws NullPointerException if the specified value is null
      */
     public TypeV put(long key, TypeV val) {
         return putIfMatch(key, val, NO_MATCH_OLD);
@@ -300,7 +298,6 @@ public class Long2ObjectNonBlockingMap<TypeV>
      *
      * @return the previous value associated with the specified key,
      * or <tt>null</tt> if there was no mapping for the key
-     * @throws NullPointerException if the specified is value is null
      */
     public TypeV putIfAbsent(long key, TypeV val) {
         return putIfMatch(key, val, TOMBSTONE);
@@ -320,8 +317,6 @@ public class Long2ObjectNonBlockingMap<TypeV>
     /**
      * Atomically do a {@link #remove(long)} if-and-only-if the key is mapped
      * to a value which is <code>equals</code> to the given value.
-     *
-     * @throws NullPointerException if the specified value is null
      */
     public boolean remove(long key, Object val) {
         return putIfMatch(key, TOMBSTONE, val) == val;
@@ -330,8 +325,6 @@ public class Long2ObjectNonBlockingMap<TypeV>
     /**
      * Atomically do a <code>put(key,val)</code> if-and-only-if the key is
      * mapped to some value already.
-     *
-     * @throws NullPointerException if the specified value is null
      */
     public TypeV replace(long key, TypeV val) {
         return putIfMatch(key, val, MATCH_ANY);
@@ -340,8 +333,6 @@ public class Long2ObjectNonBlockingMap<TypeV>
     /**
      * Atomically do a <code>put(key,newValue)</code> if-and-only-if the key is
      * mapped a value which is <code>equals</code> to <code>oldValue</code>.
-     *
-     * @throws NullPointerException if the specified value is null
      */
     public boolean replace(long key, TypeV oldValue, TypeV newValue) {
         return putIfMatch(key, newValue, oldValue) == oldValue;
@@ -349,17 +340,20 @@ public class Long2ObjectNonBlockingMap<TypeV>
 
     @SuppressWarnings("unchecked")
     private TypeV putIfMatch(long key, Object newVal, Object oldVal) {
-        if (oldVal == null || newVal == null) throw new NullPointerException();
+        if (oldVal == null || newVal == null) {
+            return null;
+        }
+
         if (key == NO_KEY) {
             Object curVal = _val_1;
-            if (oldVal == NO_MATCH_OLD || // Do we care about expected-Value at all?
-                    curVal == oldVal ||       // No instant match already?
+            if ((oldVal == NO_MATCH_OLD ||                                  // Do we care about expected-Value at all?
+                    curVal == oldVal ||                                     // No instant match already?
                     (oldVal == MATCH_ANY && curVal != TOMBSTONE) ||
-                    oldVal.equals(curVal)) { // Expensive equals check
-                if (!CAS(_val_1_handler, curVal, newVal)) // One shot CAS update attempt
-                    curVal = _val_1;                      // Failed; get failing witness
+                    oldVal.equals(curVal)) &&                               // Expensive equals check
+                    !CAS(_val_1_handler, curVal, newVal)) {                 // One shot CAS update attempt
+                curVal = _val_1;                                            // Failed; get failing witness
             }
-            return curVal == TOMBSTONE ? null : (TypeV) curVal; // Return the last value present
+            return curVal == TOMBSTONE ? null : (TypeV) curVal;             // Return the last value present
         }
         final Object res = _chm.putIfMatch(key, newVal, oldVal);
         assert !(res instanceof Prime);
@@ -389,7 +383,6 @@ public class Long2ObjectNonBlockingMap<TypeV>
      *
      * @param val value whose presence in this map is to be tested
      * @return <tt>true</tt> if this Map maps one or more keys to the specified value
-     * @throws NullPointerException if the specified value is null
      */
     public boolean containsValue(Object val) {
         if (val == null) return false;
@@ -410,7 +403,6 @@ public class Long2ObjectNonBlockingMap<TypeV>
      * returns {@code v}; otherwise it returns {@code null}.  (There can be at
      * most one such mapping.)
      *
-     * @throws NullPointerException if the specified key is null
      */
     // Never returns a Prime nor a Tombstone.
     @SuppressWarnings("unchecked")
@@ -855,7 +847,7 @@ public class Long2ObjectNonBlockingMap<TypeV>
             if ((int) len != len) {
                 log2 = 30;
                 len = (1L << log2) + 2;
-                if (sz > ((len >> 2) + (len >> 1))) throw new RuntimeException("Table is full.");
+                if (sz > ((len >> 2) + (len >> 1))) throw new IllegalStateException("Table is full.");
             }
 
             // Now limit the number of threads actually allocating memory to a
@@ -948,11 +940,10 @@ public class Long2ObjectNonBlockingMap<TypeV>
                 // algorithm) or do the copy work ourselves.  Tiny tables with huge
                 // thread counts trying to copy the table often 'panic'.
                 if (panic_start == -1) { // No panic?
-                    copyidx = (int) _copyIdx;
+                    do copyidx = (int) _copyIdx;     // Re-read
                     while (copyidx < (oldlen << 1) && // 'panic' check
-                            !_copyIdxUpdater.compareAndSet(this, copyidx, copyidx + MIN_COPY_WORK))
-                        copyidx = (int) _copyIdx;     // Re-read
-                    if (!(copyidx < (oldlen << 1))) // Panic!
+                            !_copyIdxUpdater.compareAndSet(this, copyidx, copyidx + MIN_COPY_WORK));
+                    if (copyidx >= (oldlen << 1)) // Panic!
                         panic_start = copyidx;       // Record where we started to panic-copy
                 }
 
@@ -1235,56 +1226,40 @@ public class Long2ObjectNonBlockingMap<TypeV>
      * interfaces, generified to the {@link Long} class and supporting a
      * <strong>non-auto-boxing</strong> {@link #nextLong} function.
      */
-    public class IteratorLong implements Iterator<Long>, Enumeration<Long>, LongIterator {
-        private final SnapshotV _ss;
+    public static class IteratorLong implements Enumeration<Long>, LongIterator {
+        private final Long2ObjectNonBlockingMap<?>.SnapshotV _ss;
 
-        /**
-         * A new IteratorLong
-         */
-        public IteratorLong() {
-            _ss = new SnapshotV();
+        public IteratorLong(Long2ObjectNonBlockingMap<?> map) {
+            _ss = map.new SnapshotV();
         }
 
-        /**
-         * Remove last key returned by {@link #next} or {@link #nextLong}.
-         */
+        @Override
         public void remove() {
             _ss.removeKey();
         }
 
-        /**
-         * <strong>Auto-box</strong> and return the next key.
-         */
-        public Long next() {
-            _ss.next();
-            return _ss._prevK;
-        }
-
-        /**
-         * Return the next key as a primitive {@code long}.
-         */
+        @Override
         public long nextLong() {
             _ss.next();
             return _ss._prevK;
         }
 
-        /**
-         * True if there are more keys to iterate over.
-         */
+        @Override
         public boolean hasNext() {
             return _ss.hasNext();
         }
 
-        /**
-         * <strong>Auto-box</strong> and return the next key.
-         */
-        public Long nextElement() {
-            return next();
+        @Override
+        public Long next() {
+            return Long.valueOf(nextLong());
         }
 
-        /**
-         * True if there are more keys to iterate over.
-         */
+        @Override
+        public Long nextElement() {
+            return Long.valueOf(nextLong());
+        }
+
+        @Override
         public boolean hasMoreElements() {
             return hasNext();
         }
@@ -1298,11 +1273,11 @@ public class Long2ObjectNonBlockingMap<TypeV>
      * @see #keySet()
      */
     public Enumeration<Long> keys() {
-        return new IteratorLong();
+        return new IteratorLong(this);
     }
 
     public IteratorLong fastKeyIterator() {
-        return new IteratorLong();
+        return new IteratorLong(this);
     }
 
     /**
@@ -1324,7 +1299,7 @@ public class Long2ObjectNonBlockingMap<TypeV>
     public LongSet keySet() {
         return new AbstractLongSet() {
             public LongIterator iterator() {
-                return new IteratorLong();
+                return new IteratorLong(Long2ObjectNonBlockingMap.this);
             }
 
             public void clear() {
@@ -1375,7 +1350,10 @@ public class Long2ObjectNonBlockingMap<TypeV>
         }
 
         public TypeV setValue(final TypeV val) {
-            if (val == null) throw new NullPointerException();
+            if (val == null) {
+                return null;
+            }
+
             v = val;
             return put(k, val);
         }

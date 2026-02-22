@@ -46,14 +46,14 @@ public class Permission {
         this(name, description, null, new HashMap<>());
     }
 
-    public Permission(String name, String description, String defualtValue) {
-        this(name, description, defualtValue, new HashMap<>());
+    public Permission(String name, String description, String defaultValue) {
+        this(name, description, defaultValue, new HashMap<>());
     }
 
-    public Permission(String name, String description, String defualtValue, Map<String, Boolean> children) {
+    public Permission(String name, String description, String defaultValue, Map<String, Boolean> children) {
         this.name = name;
         this.description = description != null ? description : "";
-        this.defaultValue = defualtValue != null ? defualtValue : DEFAULT_PERMISSION;
+        this.defaultValue = defaultValue != null ? defaultValue : DEFAULT_PERMISSION;
         this.children = children;
 
         this.recalculatePermissibles();
@@ -126,8 +126,14 @@ public class Permission {
         if (data != null) {
             for (Map.Entry<String, Object> e : data.entrySet()) {
                 String key = e.getKey();
-                Map<String, Object> entry = (Map<String, Object>) e.getValue();
-                result.add(loadPermission(key, entry, defaultValue, result));
+                Object value = e.getValue();
+                if (value instanceof Map<?, ?> entryMap) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> entry = (Map<String, Object>) entryMap;
+                    result.add(loadPermission(key, entry, defaultValue, result));
+                } else {
+                    throw new IllegalStateException("Permission entry for key '" + key + "' is not a Map");
+                }
             }
         }
         return result;
@@ -154,17 +160,26 @@ public class Permission {
         }
 
         if (data.containsKey("children")) {
-            if (data.get("children") instanceof Map) {
-                for (Map.Entry<String, Object> entry : ((Map<String, Object>) data.get("children")).entrySet()) {
-                    String k = entry.getKey();
+            Object childrenObj = data.get("children");
+            if (childrenObj instanceof Map<?, ?> childrenMap) {
+                for (Map.Entry<?, ?> entry : childrenMap.entrySet()) {
+                    String k = String.valueOf(entry.getKey());
                     Object v = entry.getValue();
-                    if (v instanceof Map) {
-                        Permission permission = loadPermission(k, (Map<String, Object>) v, defaultValue, output);
-                        if (permission != null) {
-                            output.add(permission);
+                    if (v instanceof Map<?, ?> vMap) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> vMapCasted = (Map<String, Object>) vMap;
+                        Permission permission = loadPermission(k, vMapCasted, defaultValue, output);
+                        output.add(permission);
+                        children.put(k, true);
+                    } else {
+                        boolean childValue;
+                        if (v instanceof Boolean bool) {
+                            childValue = bool;
+                        } else {
+                            childValue = Boolean.parseBoolean(String.valueOf(v));
                         }
+                        children.put(k, childValue);
                     }
-                    children.put(k, true);
                 }
             } else {
                 throw new IllegalStateException("'children' key is of wrong type");

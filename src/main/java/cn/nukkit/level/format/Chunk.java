@@ -459,10 +459,13 @@ public class Chunk implements IChunk {
 
     @Override
     public void removeEntity(Entity entity) {
+        if(entity.getId() < 0) return;
         if (this.entities != null) {
-            this.entities.remove(entity.getId());
-            if (!(entity instanceof Player) && this.isInit) {
-                this.setChanged();
+            synchronized (this.entities) {
+                this.entities.remove(entity.getId());
+                if (!(entity instanceof Player) && this.isInit) {
+                    this.setChanged();
+                }
             }
         }
     }
@@ -753,10 +756,8 @@ public class Chunk implements IChunk {
     protected ChunkSection getOrCreateSection(int sectionY) {
         int minSectionY = this.getDimensionData().getMinSectionY();
         int offsetY = sectionY - minSectionY;
-        for (int i = 0; i <= offsetY; i++) {
-            if (sections[i] == null) {
-                sections[i] = new ChunkSection((byte) (i + minSectionY));
-            }
+        if(this.sections[offsetY] == null) {
+            this.sections[offsetY] = new ChunkSection((byte) (offsetY + minSectionY));
         }
         return sections[offsetY];
     }

@@ -3,11 +3,12 @@ package cn.nukkit.level.structure;
 import cn.nukkit.block.BlockState;
 import cn.nukkit.level.Position;
 import cn.nukkit.level.generator.object.BlockManager;
+import cn.nukkit.math.BlockVector3;
 import cn.nukkit.nbt.tag.CompoundTag;
 import cn.nukkit.nbt.tag.IntTag;
 import cn.nukkit.nbt.tag.ListTag;
 import cn.nukkit.network.protocol.types.StructureMirror;
-import cn.nukkit.network.protocol.types.StructureRotation;
+import cn.nukkit.network.protocol.types.Rotation;
 import cn.nukkit.registry.Registries;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +36,10 @@ public class PNXStructure extends AbstractStructure {
         this.sizeZ = sizeZ;
         this.palette = palette;
         this.blocks = blocks;
+    }
+
+    public BlockVector3 getBounds() {
+        return new BlockVector3(sizeX, sizeY, sizeZ);
     }
 
     public static PNXStructure fromNbt(CompoundTag nbt) {
@@ -88,7 +93,7 @@ public class PNXStructure extends AbstractStructure {
                 int paletteIndex = (blocks[index] & 0xFF) - 1;
                 BlockState state;
                 if (paletteIndex == -1) {
-                    state = STATE_AIR;
+                    state = STATE_STRUCTURE_VOID;
                 } else if (paletteIndex < 0 || paletteIndex >= palette.length) {
                     state = STATE_UNKNOWN;
                 } else {
@@ -100,27 +105,44 @@ public class PNXStructure extends AbstractStructure {
         };
     }
 
+    @Override
     public void preparePlace(Position position, BlockManager blockManager) {
-        int baseX = position.getFloorX();
-        int baseY = position.getFloorY();
-        int baseZ = position.getFloorZ();
+        placeBlocks(position, blockManager, getBlockInstances(), new BlockAccessor<StructureBlockInstance>() {
+            @Override
+            public int x(StructureBlockInstance block) {
+                return block.x;
+            }
 
-        for (StructureBlockInstance b : getBlockInstances()) {
-            blockManager.setBlockStateAt(baseX + b.x, baseY + b.y, baseZ + b.z, b.state);
-        }
+            @Override
+            public int y(StructureBlockInstance block) {
+                return block.y;
+            }
+
+            @Override
+            public int z(StructureBlockInstance block) {
+                return block.z;
+            }
+
+            @Override
+            public BlockState state(StructureBlockInstance block) {
+                return block.state;
+            }
+        });
     }
 
+    @Override
     public void place(Position position, boolean includeEntities, BlockManager blockManager) {
         preparePlace(position, blockManager);
         blockManager.applySubChunkUpdate();
     }
 
-    public PNXStructure rotate(StructureRotation rotation) {
+    @Override
+    public PNXStructure rotate(Rotation rotation) {
         // Rotation support could also be done lazily, but here we materialize.
-        if (rotation == StructureRotation.NONE) return this;
+        if (rotation == Rotation.NONE) return this;
 
-        int newSizeX = (rotation == StructureRotation.ROTATE_180) ? sizeX : sizeZ;
-        int newSizeZ = (rotation == StructureRotation.ROTATE_180) ? sizeZ : sizeX;
+        int newSizeX = rotatedSizeX(sizeX, sizeZ, rotation);
+        int newSizeZ = rotatedSizeZ(sizeX, sizeZ, rotation);
 
         byte[] rotatedBlocks = new byte[blocks.length];
 
@@ -129,12 +151,8 @@ public class PNXStructure extends AbstractStructure {
             int y = (idx / sizeX) % sizeY;
             int z = idx / (sizeX * sizeY);
 
-            int rx = x, rz = z;
-            switch (rotation) {
-                case ROTATE_90 -> { rx = z; rz = sizeX - 1 - x; }
-                case ROTATE_180 -> { rx = sizeX - 1 - x; rz = sizeZ - 1 - z; }
-                case ROTATE_270 -> { rx = sizeZ - 1 - z; rz = x; }
-            }
+            int rx = rotateX(sizeX, sizeZ, x, z, rotation);
+            int rz = rotateZ(sizeX, sizeZ, x, z, rotation);
 
             int newIdx = rx + (y * newSizeX) + (rz * newSizeX * sizeY);
             rotatedBlocks[newIdx] = blocks[idx];
@@ -143,6 +161,7 @@ public class PNXStructure extends AbstractStructure {
         return new PNXStructure(newSizeX, sizeY, newSizeZ, palette, rotatedBlocks);
     }
 
+    @Override
     public PNXStructure mirror(StructureMirror mirror) {
         if (mirror == StructureMirror.NONE) return this;
 
